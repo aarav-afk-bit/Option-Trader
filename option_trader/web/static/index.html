@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Option Trader</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Option Trader</div>
+  <form id="controls" class="controls" autocomplete="off">
+    <label>Symbol
+      <input id="symbol" list="symbols" value="NIFTY" required>
+      <datalist id="symbols">
+        <option>NIFTY</option><option>BANKNIFTY</option><option>FINNIFTY</option>
+        <option>MIDCPNIFTY</option><option>RELIANCE</option><option>HDFCBANK</option>
+        <option>ICICIBANK</option><option>INFY</option><option>TCS</option><option>SBIN</option>
+      </datalist>
+    </label>
+    <label>Expiry <select id="expiry"></select></label>
+    <label>Source
+      <select id="source">
+        <option value="">Auto</option><option value="nse">NSE</option>
+        <option value="angelone">Angel One</option><option value="yahoo">Yahoo</option>
+      </select>
+    </label>
+    <button type="submit" class="primary">Load</button>
+    <label class="inline"><input type="checkbox" id="autorefresh" checked> Auto-refresh</label>
+  </form>
+  <div class="status">
+    <span id="online-dot" class="dot"></span><span id="online-text">checking…</span>
+  </div>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="chain">Option Chain</button>
+  <button class="tab" data-tab="signals">Signals &amp; Ideas</button>
+  <button class="tab" data-tab="builder">Strategy Builder</button>
+</nav>
+
+<main>
+  <section id="tab-chain" class="panel active">
+    <div class="meta" id="chain-meta"></div>
+    <div class="table-wrap">
+      <table id="chain-table" class="chain">
+        <thead>
+          <tr class="side-head"><th colspan="8">CALLS</th><th></th><th colspan="8">PUTS</th></tr>
+          <tr>
+            <th>OI</th><th>Chg OI</th><th>Volume</th><th>IV</th><th>Delta</th><th>Bid</th><th>Ask</th><th>LTP</th>
+            <th class="strike">Strike</th>
+            <th>LTP</th><th>Bid</th><th>Ask</th><th>Delta</th><th>IV</th><th>Volume</th><th>Chg OI</th><th>OI</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="hint">Every number above comes from the live source shown. Click a call/put LTP to add it to the Strategy Builder.</p>
+  </section>
+
+  <section id="tab-signals" class="panel">
+    <div class="row">
+      <button id="load-signals" class="primary">Analyse now</button>
+      <label class="inline">Lots <input id="idea-lots" type="number" min="1" value="1" class="small"></label>
+    </div>
+    <div id="signals-out"><p class="muted">Press “Analyse now” to compute signals and trade ideas from the live chain and price history.</p></div>
+  </section>
+
+  <section id="tab-builder" class="panel">
+    <div id="builder-root"><p class="muted">Strategy builder loading…</p></div>
+  </section>
+</main>
+
+<footer class="foot">
+  Live data from NSE, Angel One SmartAPI or Yahoo Finance. Not investment advice.
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
