@@ -263,6 +263,7 @@ $("#load-signals").addEventListener("click", loadSignals);
 function switchTab(name) {
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   $$(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + name));
+  if (App.onTabShown) App.onTabShown(name);
 }
 App.switchTab = switchTab;
 $$(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));

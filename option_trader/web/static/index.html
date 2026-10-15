@@ -69,7 +69,62 @@
   </section>
 
   <section id="tab-builder" class="panel">
-    <div id="builder-root"><p class="muted">Strategy builder loading…</p></div>
+    <div class="builder">
+      <div class="builder-side">
+        <div class="card">
+          <h3>1. Pick a strategy</h3>
+          <label>Strategy <select id="tpl-select"></select></label>
+          <p id="tpl-desc" class="muted"></p>
+          <div class="row">
+            <label>Lots <input id="tpl-lots" type="number" min="1" value="1" class="small"></label>
+            <label title="Multiply the distance between strikes">Width <input id="tpl-width" type="number" min="1" value="1" class="small"></label>
+            <label title="Move all strikes up/down by N strikes">ATM shift <input id="tpl-shift" type="number" value="0" class="small"></label>
+            <label>Fill
+              <select id="tpl-fill"><option value="ltp">LTP</option><option value="mid">Mid</option><option value="market">Bid/Ask</option></select>
+            </label>
+          </div>
+          <div class="row">
+            <button id="tpl-apply" class="primary">Put on current chain</button>
+            <button id="tpl-delete" class="danger hidden">Delete saved</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>2. Edit legs</h3>
+          <div class="table-wrap"><table class="legs">
+            <thead><tr><th>Side</th><th>Type</th><th>Expiry</th><th>Strike</th><th>Lots</th><th title="Leave blank to use the live price">Entry price</th><th>Live</th><th></th></tr></thead>
+            <tbody id="legs-body"></tbody>
+          </table></div>
+          <div class="row">
+            <button id="leg-add">+ Add leg</button>
+            <button id="legs-clear" class="danger">Clear</button>
+          </div>
+          <p class="muted">Tip: click an LTP in the Option Chain to add a BUY leg (Shift+click to SELL). Blank entry price = live price.</p>
+        </div>
+        <div class="card">
+          <h3>3. Scenario</h3>
+          <label><span>Target date: <b id="target-label"></b></span>
+            <input id="target-days" type="range" min="0" max="30" step="0.5" value="0"></label>
+          <label><span>IV change: <b id="iv-label">0</b> vol pts</span>
+            <input id="iv-shift" type="range" min="-15" max="15" step="0.5" value="0"></label>
+          <label><span>Price range: ±<b id="range-label">6</b>%</span>
+            <input id="range-pct" type="range" min="2" max="40" step="1" value="6"></label>
+        </div>
+        <div class="card">
+          <h3>4. Save as my strategy</h3>
+          <label>Name <input id="save-name" maxlength="80" placeholder="e.g. My wide condor"></label>
+          <label>View
+            <select id="save-view"><option>any</option><option>bullish</option><option>bearish</option><option>neutral</option><option>volatile</option></select>
+          </label>
+          <label>Notes <input id="save-desc" maxlength="300"></label>
+          <div class="row"><button id="save-btn" class="primary">Save strategy</button></div>
+          <p id="save-msg" class="muted"></p>
+        </div>
+      </div>
+      <div class="builder-main">
+        <div id="payoff" class="payoff"></div>
+        <div id="builder-stats" class="cards"></div>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -77,6 +132,8 @@
   Live data from NSE, Angel One SmartAPI or Yahoo Finance. Not investment advice.
 </footer>
 
+<script src="/static/vendor/plotly-2.35.2.min.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/builder.js"></script>
 </body>
 </html>

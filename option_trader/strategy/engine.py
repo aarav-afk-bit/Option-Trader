@@ -37,6 +37,7 @@ class Leg:
     expiry: Optional[date] = None
     iv: Optional[float] = None
     expiry_at: Optional[datetime] = None
+    market_price: Optional[float] = None  # current live price, used to value the leg today
 
     @property
     def sign(self) -> int:
@@ -68,6 +69,7 @@ class Leg:
             expiry=date.fromisoformat(exp) if isinstance(exp, str) and exp else exp,
             iv=float(d["iv"]) if d.get("iv") not in (None, "") else None,
             expiry_at=datetime.fromisoformat(exp_at) if isinstance(exp_at, str) and exp_at else None,
+            market_price=float(d["market_price"]) if d.get("market_price") not in (None, "") else None,
         )
 
 
@@ -109,7 +111,8 @@ def leg_from_chain(chain: OptionChain, option_type: LegType, action: Action, str
         px = q.price
     if not px:
         raise ValueError(f"No live price for {strike:g} {option_type} in the {chain.symbol} chain")
-    return Leg(option_type, action, strike, lots, float(px), chain.expiry, q.iv, chain.expiry_at)
+    return Leg(option_type, action, strike, lots, float(px), chain.expiry, q.iv, chain.expiry_at,
+               q.mid or q.price)
 
 
 def _years(start: datetime, end: Optional[datetime]) -> float:
@@ -119,11 +122,23 @@ def _years(start: datetime, end: Optional[datetime]) -> float:
 
 
 def _leg_iv(leg: Leg, spot: float, now: datetime, r: float, default_iv: float) -> float:
+    """Volatility used to value the leg before expiry.
+
+    Preference: IV implied by the current live price under this model (so a position opened
+    at market shows ~zero P&L today), then the source's IV, then the IV implied by the entry
+    premium, then ``default_iv``.
+    """
+    if leg.option_type == "FUT":
+        return default_iv
+    t = _years(now, leg.expiry_datetime())
+    if leg.market_price:
+        solved = implied_vol(leg.market_price, spot, leg.strike, t, r, leg.option_type)
+        if solved:
+            return solved
     if leg.iv:
         return leg.iv
-    if leg.option_type != "FUT" and leg.premium > 0:
-        solved = implied_vol(leg.premium, spot, leg.strike, _years(now, leg.expiry_datetime()), r,
-                             leg.option_type)
+    if leg.premium > 0:
+        solved = implied_vol(leg.premium, spot, leg.strike, t, r, leg.option_type)
         if solved:
             return solved
     return default_iv
