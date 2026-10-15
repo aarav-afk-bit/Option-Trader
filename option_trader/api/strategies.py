@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..errors import DataUnavailableError
 from ..providers.manager import ProviderManager
 from ..strategy.engine import Leg, Strategy, analyze
+from ..strategy.templates import BUILTIN_BY_ID, BUILTIN_TEMPLATES, ResolveError, StrategyTemplate, resolve
 from .deps import get_manager, parse_expiry
 
 router = APIRouter(prefix="/api/strategy")
@@ -90,3 +91,62 @@ def analyze_endpoint(body: AnalyzeIn, manager: ProviderManager = Depends(get_man
     result["symbol"] = chain.symbol
     result["chain_fetched_at"] = chain.fetched_at.isoformat()
     return result
+
+
+class BuildIn(BaseModel):
+    symbol: str
+    expiry: Optional[str] = None
+    source: Optional[str] = None
+    lots: int = 1
+    width: int = 1
+    atm_shift: int = 0
+    fill: str = "ltp"
+    target_days: Optional[float] = None
+    iv_shift: float = 0.0
+    range_pct: float = 0.15
+
+
+def lookup_template(template_id: str, request_app) -> StrategyTemplate:
+    if template_id in BUILTIN_BY_ID:
+        return BUILTIN_BY_ID[template_id]
+    raise HTTPException(404, f"No strategy called {template_id!r}")
+
+
+def all_templates(request_app) -> list[StrategyTemplate]:
+    return list(BUILTIN_TEMPLATES)
+
+
+def build_from_template(template: StrategyTemplate, body: BuildIn, manager: ProviderManager) -> dict:
+    """Place a template on the live chain and analyse it."""
+    try:
+        chain = manager.get_chain(body.symbol, parse_expiry(body.expiry), body.source)
+
+        def later_chain(offset: int):
+            later = [e for e in chain.expiries if e > chain.expiry]
+            if len(later) < offset:
+                raise ResolveError(f"No expiry {offset} step(s) after {chain.expiry} is listed")
+            return manager.get_chain(body.symbol, later[offset - 1], chain.source)
+
+        strategy = resolve(template, chain, body.lots, body.width, body.fill, body.atm_shift, later_chain)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ResolveError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    now = datetime.now(timezone.utc)
+    target = now + timedelta(days=body.target_days) if body.target_days is not None else None
+    result = analyze(strategy, chain.spot, manager.risk_free_rate, now=now, target=target,
+                     iv_shift=body.iv_shift, range_pct=body.range_pct)
+    result.update(source=chain.source, symbol=chain.symbol, template=template.to_dict(),
+                  chain_fetched_at=chain.fetched_at.isoformat())
+    return result
+
+
+@router.get("/templates")
+def list_templates(request: Request) -> list[dict]:
+    return [t.to_dict() for t in all_templates(request.app)]
+
+
+@router.post("/templates/{template_id}/build")
+def build_template(template_id: str, body: BuildIn, request: Request,
+                   manager: ProviderManager = Depends(get_manager)) -> dict:
+    return build_from_template(lookup_template(template_id, request.app), body, manager)
