@@ -111,3 +111,7 @@ td.top-oi { outline: 1px solid var(--amber); outline-offset: -2px; }
 .chart { height: 330px; }
 .small-btn { font-size: 12px; padding: 2px 8px; margin-left: 8px; }
 @media (max-width: 700px) { .chart-grid { grid-template-columns: 1fr; } }
+
+/* ---------- watchlist ---------- */
+table.watch td:first-child a { color: var(--accent); font-weight: 600; cursor: pointer; }
+table.watch td.err { color: var(--red); white-space: normal; }

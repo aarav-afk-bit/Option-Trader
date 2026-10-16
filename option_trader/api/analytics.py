@@ -109,3 +109,35 @@ def intraday(symbol: str, expiry: Optional[str] = None, source: Optional[str] = 
         except DataUnavailableError as exc:
             raise HTTPException(503, str(exc)) from exc
     return {"symbol": symbol.upper(), "expiry": exp.isoformat(), "points": manager.get_snapshots(symbol, exp)}
+
+
+@router.get("/watchlist")
+def watchlist(symbols: str, source: Optional[str] = None,
+              manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Snapshot of several underlyings from their live nearest-expiry chains."""
+    names = [x.strip().upper() for x in symbols.split(",") if x.strip()][:20]
+    rows = []
+    for sym in names:
+        try:
+            ch = manager.get_chain(sym, None, source)
+        except DataUnavailableError as exc:
+            rows.append({"symbol": sym, "error": str(exc)})
+            continue
+        ca = analyze_chain(ch)
+        weight = sum(sg.strength for sg in ca.signals)
+        score = sum(sg.score() for sg in ca.signals) / weight if weight else 0.0
+        atm = ch.row(ch.atm_strike)
+        straddle = None
+        if atm and atm.call and atm.put and atm.call.price and atm.put.price:
+            straddle = atm.call.price + atm.put.price
+        rows.append({
+            "symbol": ch.symbol, "spot": ch.spot, "expiry": ch.expiry.isoformat(), "source": ch.source,
+            "fetched_at": ch.fetched_at.isoformat(), "lot_size": ch.lot_size,
+            "pcr_oi": ca.pcr["pcr_oi"], "max_pain": ca.max_pain,
+            "atm_iv": ca.expected_move["atm_iv"], "straddle": straddle,
+            "support": ca.levels["support"][0]["strike"] if ca.levels["support"] else None,
+            "resistance": ca.levels["resistance"][0]["strike"] if ca.levels["resistance"] else None,
+            "options_score": round(score, 3),
+            "bias": "bullish" if score > 0.2 else "bearish" if score < -0.2 else "neutral",
+        })
+    return {"rows": rows}
