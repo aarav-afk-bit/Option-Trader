@@ -1,0 +1,23 @@
+{
+  "records": {
+    "expiryDates": ["27-Oct-2026", "03-Nov-2026"],
+    "timestamp": "14-Oct-2026 15:30:00",
+    "underlyingValue": 25012.35,
+    "strikePrices": [24900, 25000, 25100],
+    "data": [
+      {"strikePrice": 24900, "expiryDate": "27-Oct-2026",
+       "CE": {"strikePrice": 24900, "expiryDate": "27-Oct-2026", "underlying": "NIFTY", "identifier": "OPTIDXNIFTY27-10-2026CE24900.00", "openInterest": 51234, "changeinOpenInterest": 1200, "totalTradedVolume": 223344, "impliedVolatility": 11.2, "lastPrice": 210.5, "change": -12.3, "bidQty": 75, "bidprice": 210.0, "askQty": 150, "askPrice": 211.0, "underlyingValue": 25012.35},
+       "PE": {"strikePrice": 24900, "expiryDate": "27-Oct-2026", "underlying": "NIFTY", "identifier": "OPTIDXNIFTY27-10-2026PE24900.00", "openInterest": 81234, "changeinOpenInterest": 5200, "totalTradedVolume": 323344, "impliedVolatility": 12.1, "lastPrice": 92.4, "change": 4.3, "bidQty": 75, "bidprice": 92.0, "askQty": 75, "askPrice": 92.8, "underlyingValue": 25012.35}},
+      {"strikePrice": 25000, "expiryDate": "27-Oct-2026",
+       "CE": {"strikePrice": 25000, "expiryDate": "27-Oct-2026", "openInterest": 91234, "changeinOpenInterest": -800, "totalTradedVolume": 523344, "impliedVolatility": 10.9, "lastPrice": 145.0, "change": -10.0, "bidQty": 75, "bidprice": 144.5, "askQty": 75, "askPrice": 145.5, "underlyingValue": 25012.35},
+       "PE": {"strikePrice": 25000, "expiryDate": "27-Oct-2026", "openInterest": 101234, "changeinOpenInterest": 9200, "totalTradedVolume": 623344, "impliedVolatility": 11.5, "lastPrice": 128.0, "change": 6.0, "bidQty": 75, "bidprice": 127.5, "askQty": 75, "askPrice": 128.5, "underlyingValue": 25012.35}},
+      {"strikePrice": 25100, "expiryDate": "27-Oct-2026",
+       "CE": {"strikePrice": 25100, "expiryDate": "27-Oct-2026", "openInterest": 121234, "changeinOpenInterest": 15000, "totalTradedVolume": 423344, "impliedVolatility": 10.5, "lastPrice": 92.0, "change": -8.0, "bidQty": 75, "bidprice": 91.5, "askQty": 75, "askPrice": 92.5, "underlyingValue": 25012.35},
+       "PE": {"strikePrice": 25100, "expiryDate": "27-Oct-2026", "openInterest": 41234, "changeinOpenInterest": 200, "totalTradedVolume": 123344, "impliedVolatility": 11.9, "lastPrice": 175.0, "change": 7.5, "bidQty": 75, "bidprice": 174.5, "askQty": 75, "askPrice": 175.5, "underlyingValue": 25012.35}},
+      {"strikePrice": 25000, "expiryDate": "03-Nov-2026",
+       "CE": {"strikePrice": 25000, "expiryDate": "03-Nov-2026", "openInterest": 1234, "lastPrice": 260.0, "impliedVolatility": 11.0},
+       "PE": {"strikePrice": 25000, "expiryDate": "03-Nov-2026", "openInterest": 2234, "lastPrice": 240.0, "impliedVolatility": 11.4}}
+    ]
+  },
+  "filtered": {"data": [], "CE": {"totOI": 263702, "totVol": 1170032}, "PE": {"totOI": 223702, "totVol": 1070032}}
+}
