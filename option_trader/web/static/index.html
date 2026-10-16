@@ -51,6 +51,7 @@
   <button class="tab" data-tab="builder">Strategy Builder</button>
   <button class="tab" data-tab="screener">Screener</button>
   <button class="tab" data-tab="portfolio">Paper Portfolio</button>
+  <button class="tab" data-tab="alerts">Alerts <span id="alert-count" class="pill neutral hidden">0</span></button>
 </nav>
 
 <main>
@@ -231,7 +232,32 @@
     <div id="pf-list"><p class="muted">No paper positions yet. Build a strategy and press “Paper trade this”.</p></div>
     <p class="muted">Paper trades are opened, valued and closed at live chain prices. No real orders are placed.</p>
   </section>
+  <section id="tab-alerts" class="panel">
+    <form id="al-form" class="row" autocomplete="off">
+      <label>Symbol <input id="al-symbol" list="symbols" placeholder="current" class="small" style="width:120px"></label>
+      <label>When
+        <select id="al-metric">
+          <option value="spot">Spot price</option><option value="pcr">PCR (OI)</option>
+          <option value="atm_iv">ATM IV %</option><option value="ltp">Option LTP</option>
+        </select>
+      </label>
+      <label class="al-ltp hidden">Strike <input id="al-strike" type="number" step="any" class="small" style="width:100px"></label>
+      <label class="al-ltp hidden">Type <select id="al-type"><option>CE</option><option>PE</option></select></label>
+      <label>is
+        <select id="al-op"><option value="above">above</option><option value="below">below</option></select>
+      </label>
+      <label>Value <input id="al-value" type="number" step="any" required class="small" style="width:110px"></label>
+      <button type="submit" class="primary">Add alert</button>
+      <button type="button" id="al-notify">Enable desktop notifications</button>
+    </form>
+    <div class="table-wrap"><table class="simple">
+      <thead><tr><th>Symbol</th><th>Condition</th><th>Last value</th><th>Status</th><th></th></tr></thead>
+      <tbody id="al-body"></tbody>
+    </table></div>
+    <p class="muted">Alerts are checked against live data each time the chain for that symbol refreshes while this page is open (every 30 s in market hours). Each alert fires once; re-arm it to watch again.</p>
+  </section>
 </main>
+<div id="toasts" class="toasts"></div>
 
 <footer class="foot">
   Live data from NSE, Angel One SmartAPI or Yahoo Finance. Not investment advice.
@@ -244,5 +270,6 @@
 <script src="/static/watchlist.js"></script>
 <script src="/static/portfolio.js"></script>
 <script src="/static/screener.js"></script>
+<script src="/static/alerts.js"></script>
 </body>
 </html>

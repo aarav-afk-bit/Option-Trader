@@ -120,3 +120,14 @@ table.watch td.err { color: var(--red); white-space: normal; }
   background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 14px; }
 #pnl-table td, #pnl-table th { text-align: right; }
 #pnl-table tr.spot-row td { background: var(--atm); font-weight: 600; }
+
+/* ---------- alerts ---------- */
+.toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+.toast { background: var(--panel); border: 1px solid var(--amber); border-left-width: 4px; border-radius: 6px;
+  padding: 10px 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, .5); max-width: 360px; }
+.tab .pill { padding: 0 6px; margin-left: 4px; }
+@media (max-width: 700px) {
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tab { flex: 0 0 auto; }
+  .toasts { left: 16px; right: 16px; }
+}
