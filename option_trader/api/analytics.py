@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..analytics.chain import analyze_chain, atm_iv
+from ..analytics.chain import analyze_chain, atm_iv, expected_move
 from ..analytics.recommender import recommend
 from ..analytics.technicals import technical_snapshot
 from ..strategy.templates import ResolveError
@@ -73,3 +73,39 @@ def recommendations(symbol: str, expiry: Optional[str] = None, source: Optional[
             raise ResolveError(str(exc)) from exc
 
     return recommend(chain, candles, manager.risk_free_rate, max(lots, 1), later_chain)
+
+
+@router.get("/term-structure")
+def term_structure(symbol: str, source: Optional[str] = None, count: int = 4,
+                   manager: ProviderManager = Depends(get_manager)) -> dict:
+    """ATM IV and expected move for the next ``count`` expiries (each from a live chain)."""
+    try:
+        first = manager.get_chain(symbol, None, source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    expiries = [e for e in first.expiries if e >= first.expiry][: max(1, min(count, 8))] or [first.expiry]
+    points, errors = [], []
+    for exp in expiries:
+        try:
+            ch = first if exp == first.expiry else manager.get_chain(symbol, exp, first.source)
+        except DataUnavailableError as exc:
+            errors.append(f"{exp}: {exc}")
+            continue
+        em = expected_move(ch)
+        points.append({"expiry": exp.isoformat(), "days": em["days_to_expiry"], "atm_iv": em["atm_iv"],
+                       "straddle": em["straddle_price"], "one_sd_move": em["one_sd_move"]})
+    return {"symbol": first.symbol, "spot": first.spot, "source": first.source, "points": points,
+            "errors": errors}
+
+
+@router.get("/intraday")
+def intraday(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None,
+             manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Snapshots recorded each time this chain was fetched live today (kept in memory)."""
+    exp = parse_expiry(expiry)
+    if exp is None:
+        try:
+            exp = manager.get_chain(symbol, None, source).expiry
+        except DataUnavailableError as exc:
+            raise HTTPException(503, str(exc)) from exc
+    return {"symbol": symbol.upper(), "expiry": exp.isoformat(), "points": manager.get_snapshots(symbol, exp)}

@@ -45,6 +45,7 @@
 
 <nav class="tabs">
   <button class="tab active" data-tab="chain">Option Chain</button>
+  <button class="tab" data-tab="charts">Charts</button>
   <button class="tab" data-tab="signals">Signals &amp; Ideas</button>
   <button class="tab" data-tab="builder">Strategy Builder</button>
 </nav>
@@ -87,6 +88,17 @@
       </table>
     </div>
     <p class="hint">Every number above comes from the live source shown. Click a call/put LTP to add it to the Strategy Builder.</p>
+  </section>
+
+  <section id="tab-charts" class="panel">
+    <div class="chart-grid">
+      <div class="card"><h3>Open interest by strike</h3><div id="ch-oi" class="chart"></div></div>
+      <div class="card"><h3>Change in open interest</h3><div id="ch-oichg" class="chart"></div></div>
+      <div class="card"><h3>IV smile</h3><div id="ch-smile" class="chart"></div></div>
+      <div class="card"><h3>IV term structure <button id="load-term" class="small-btn">Load</button></h3><div id="ch-term" class="chart"><p class="muted">Fetches the next expiries' live chains. Press Load.</p></div></div>
+      <div class="card wide"><h3>Intraday: spot, PCR and ATM IV</h3><div id="ch-intraday" class="chart"></div>
+        <p class="muted">Recorded from each live fetch while the app is running (resets daily and on restart).</p></div>
+    </div>
   </section>
 
   <section id="tab-signals" class="panel">
@@ -164,5 +176,6 @@
 <script src="/static/vendor/plotly-2.35.2.min.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/builder.js"></script>
+<script src="/static/charts.js"></script>
 </body>
 </html>

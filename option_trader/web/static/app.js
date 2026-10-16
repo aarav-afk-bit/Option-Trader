@@ -363,6 +363,27 @@ function switchTab(name) {
   if (App.onTabShown) App.onTabShown(name);
 }
 App.switchTab = switchTab;
+App.activeTab = () => ($(".tab.active") || {}).dataset?.tab;
+
+/** Plotly layout themed from the current CSS variables. */
+App.plotLayout = function (extra = {}) {
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const text = css("--text"), grid = css("--border");
+  const layout = {
+    margin: { l: 60, r: 20, t: 10, b: 45 },
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: text, size: 12 },
+    legend: { orientation: "h", y: -0.2 },
+    hovermode: "x unified",
+    hoverlabel: { bgcolor: css("--panel2"), bordercolor: grid, font: { color: text } },
+    ...extra,
+  };
+  // Every axis (xaxis, yaxis, yaxis2, ...) gets the themed grid colours unless it sets its own.
+  for (const key of new Set(["xaxis", "yaxis", ...Object.keys(extra).filter((k) => /^[xy]axis\d*$/.test(k))])) {
+    layout[key] = { gridcolor: grid, zerolinecolor: grid, linecolor: grid, ...(extra[key] || {}) };
+  }
+  return layout;
+};
 $$(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
 $("#controls").addEventListener("submit", async (ev) => {

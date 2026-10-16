@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import socket
+from collections import deque
 from concurrent.futures import Future
 import threading
 import time
@@ -62,6 +63,8 @@ class ProviderManager:
         self._cache: dict[tuple, _CacheEntry] = {}
         self._lock = threading.Lock()
         self._inflight: dict[tuple, Future] = {}
+        # Intraday snapshots of each freshly fetched chain: {(symbol, expiry): deque[dict]}
+        self.snapshots: dict[tuple, deque] = {}
         self._last_call: dict[str, float] = {}
         self._throttle_lock = threading.Lock()
         self._online: Optional[bool] = None
@@ -115,6 +118,30 @@ class ProviderManager:
     def _store(self, key: tuple, value) -> None:
         with self._lock:
             self._cache[key] = _CacheEntry(value, time.time())
+
+    def _record_snapshot(self, chain: OptionChain) -> None:
+        from ..analytics.chain import atm_iv, max_pain, pcr
+
+        p = pcr(chain)
+        snap = {
+            "t": chain.fetched_at.isoformat(),
+            "spot": chain.spot,
+            "pcr_oi": p["pcr_oi"],
+            "call_oi": p["call_oi"],
+            "put_oi": p["put_oi"],
+            "atm_iv": atm_iv(chain),
+            "max_pain": max_pain(chain),
+            "source": chain.source,
+        }
+        with self._lock:
+            buf = self.snapshots.setdefault((chain.symbol, chain.expiry), deque(maxlen=2000))
+            if buf and buf[-1]["t"][:10] != snap["t"][:10]:
+                buf.clear()  # new trading day
+            buf.append(snap)
+
+    def get_snapshots(self, symbol: str, expiry: date) -> list[dict]:
+        with self._lock:
+            return list(self.snapshots.get((normalize_symbol(symbol), expiry), ()))
 
     def _single_flight(self, key: tuple, fn: Callable[[], object]):
         """Run ``fn`` once for concurrent callers asking for the same ``key``.
@@ -193,6 +220,7 @@ class ProviderManager:
             )
             enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
             self._store(key, chain)
+            self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
 
         return self._single_flight(key, fetch)  # type: ignore[return-value]
