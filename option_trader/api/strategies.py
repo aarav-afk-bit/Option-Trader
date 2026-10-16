@@ -232,3 +232,44 @@ def delete_saved(strategy_id: str, store: StrategyStore = Depends(get_store)) ->
     if not store.delete(strategy_id):
         raise HTTPException(404, f"No saved strategy called {strategy_id!r}")
     return {"deleted": strategy_id}
+
+
+class ScreenIn(BaseModel):
+    symbol: str
+    expiry: Optional[str] = None
+    source: Optional[str] = None
+    view: str = "any"
+    lots: int = 1
+    max_loss: Optional[float] = Field(None, description="Largest acceptable loss (positive number)")
+    min_pop: float = 0.0
+    allow_unlimited_loss: bool = False
+    sort: str = "score"
+    top: int = 25
+
+
+@router.post("/screen")
+def screen_strategies(body: ScreenIn, request: Request,
+                      manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Place every built-in and saved strategy on the live chain and rank them."""
+    from ..strategy.screener import screen
+
+    try:
+        chain = manager.get_chain(body.symbol, parse_expiry(body.expiry), body.source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+    def later_chain(offset: int):
+        later = [e for e in chain.expiries if e > chain.expiry]
+        if len(later) < offset:
+            raise ResolveError("No later expiry listed")
+        try:
+            return manager.get_chain(body.symbol, later[offset - 1], chain.source)
+        except DataUnavailableError as exc:
+            raise ResolveError(str(exc)) from exc
+
+    out = screen(chain, all_templates(request.app), manager.risk_free_rate, body.view, max(body.lots, 1),
+                 body.max_loss, body.min_pop, body.allow_unlimited_loss, body.sort,
+                 chain_for_offset=later_chain, top=max(1, min(body.top, 100)))
+    out.update(symbol=chain.symbol, expiry=chain.expiry.isoformat(), spot=chain.spot, source=chain.source,
+               fetched_at=chain.fetched_at.isoformat())
+    return out
