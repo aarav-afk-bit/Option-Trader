@@ -18,6 +18,7 @@ from typing import Callable, Optional
 from ..config import Settings, get_settings
 from ..errors import DataUnavailableError
 from ..models import Candle, OptionChain, utcnow
+from ..pricing import enrich_chain
 from .base import DataProvider, normalize_symbol
 
 log = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class _CacheEntry:
 class ProviderManager:
     providers: list[DataProvider]
     cache_ttl: float = 30.0
+    risk_free_rate: float = 0.065
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
 
@@ -75,7 +77,8 @@ class ProviderManager:
             "yahoo": YahooProvider,
             "angelone": lambda: AngelOneProvider(settings),
         }
-        return cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl)
+        return cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
+                   risk_free_rate=settings.risk_free_rate)
 
     # -- helpers ----------------------------------------------------------------------------
     def provider(self, name: str) -> DataProvider:
@@ -146,6 +149,7 @@ class ProviderManager:
         chain = self._try_each(
             f"the {symbol} option chain", source, lambda p: p.get_option_chain(symbol, expiry)
         )
+        enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
         self._store(key, chain)
         return chain  # type: ignore[return-value]
 
