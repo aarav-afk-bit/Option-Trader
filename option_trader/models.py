@@ -89,6 +89,8 @@ class OptionChain:
     expiries: list[date] = field(default_factory=list)
     currency: str = "INR"
     notes: list[str] = field(default_factory=list)
+    # Exact expiry moment when it differs from NSE's 15:30 IST close (e.g. US options).
+    expiry_at: Optional[datetime] = None
 
     def __post_init__(self) -> None:
         self.rows.sort(key=lambda r: r.strike)
@@ -123,6 +125,8 @@ class OptionChain:
         return max(set(gaps), key=gaps.count) if gaps else 0.0
 
     def expiry_datetime(self) -> datetime:
+        if self.expiry_at is not None:
+            return self.expiry_at
         return datetime.combine(self.expiry, NSE_EXPIRY_TIME, tzinfo=IST)
 
     def years_to_expiry(self, now: Optional[datetime] = None) -> float:
