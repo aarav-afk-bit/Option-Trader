@@ -95,3 +95,12 @@ input[type="range"] { width: 100%; padding: 0; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+/* ---------- chain tools ---------- */
+.chain-tools { gap: 12px; align-items: center; }
+.chain-tools label.inline { color: var(--text); }
+#chain-table.hide-oi .c-oi, #chain-table.hide-vol .c-vol, #chain-table.hide-iv .c-iv,
+#chain-table.hide-greeks .c-greeks, #chain-table.hide-greeks2 .c-greeks2,
+#chain-table.hide-quote .c-quote { display: none; }
+td.top-oi span { font-weight: 700; }
+td.top-oi { outline: 1px solid var(--amber); outline-offset: -2px; }
