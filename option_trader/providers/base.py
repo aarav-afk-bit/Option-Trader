@@ -35,6 +35,8 @@ class DataProvider(ABC):
     """A source of real market data."""
 
     name: str = "base"
+    # Minimum seconds between requests to this source (protects against rate limits/bans).
+    min_interval: float = 0.0
 
     def is_configured(self) -> bool:
         """Whether the provider has everything it needs (e.g. credentials) to try a request."""

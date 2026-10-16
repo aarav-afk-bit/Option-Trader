@@ -99,6 +99,7 @@ class InstrumentMaster:
 
 class AngelOneProvider(DataProvider):
     name = "angelone"
+    min_interval = 0.5
 
     def __init__(self, settings: Optional[Settings] = None, session: Optional[requests.Session] = None,
                  timeout: float = 15.0):
