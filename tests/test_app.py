@@ -18,3 +18,13 @@ def test_index_and_static_served():
     assert r.status_code == 200 and "Option Trader" in r.text
     assert client.get("/static/app.js").status_code == 200
     assert client.get("/static/styles.css").status_code == 200
+
+
+def test_dark_theme_is_default():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    css = client.get("/static/styles.css").text
+    assert 'id="theme-toggle"' in html
+    root = css[css.index(":root {"):css.index("}", css.index(":root {"))]
+    assert "color-scheme: dark" in root
+    assert ':root[data-theme="light"]' in css
