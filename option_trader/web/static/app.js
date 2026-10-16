@@ -130,6 +130,7 @@ function renderChain(ch) {
     <span>Lot size <b>${ch.lot_size ?? "–"}</b></span>
     <span>Source <b>${esc(ch.source.toUpperCase())}</b></span>
     <span>Fetched <b>${esc(ts)}</b>${ch.exchange_timestamp ? ` · exchange time <b>${esc(ch.exchange_timestamp)}</b>` : ""}</span>
+    ${App.market && !App.market.open ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
     ${ch.notes.map((n) => `<span class="muted">${esc(n)}</span>`).join("")}`;
 
   const maxOI = Math.max(1, ...ch.rows.flatMap((r) => [r.call?.oi || 0, r.put?.oi || 0]));
@@ -298,19 +299,45 @@ $("#controls").addEventListener("submit", async (ev) => {
 $("#expiry").addEventListener("change", () => { App._scrolled = false; loadChain(); });
 $("#source").addEventListener("change", () => $("#controls").requestSubmit());
 
-function scheduleRefresh() {
-  clearInterval(App.timer);
-  if ($("#autorefresh").checked) {
-    App.timer = setInterval(async () => {
-      if (document.hidden) return;
-      if (await refreshStatus()) loadChain(true);
-    }, 30000);
+/* ---------------- market session ---------------- */
+App.market = null;
+async function refreshMarket() {
+  const badge = $("#market-badge");
+  try {
+    const m = await api("/api/market");
+    App.market = m;
+    const label = m.open ? "Market open" : m.state === "pre-open" ? "Pre-open" : "Market closed";
+    badge.textContent = label + (m.estimate ? " (est.)" : "");
+    badge.className = "pill " + (m.open ? "bullish" : "bearish");
+    const next = m.next_open ? ` · opens ${new Date(m.next_open).toLocaleString()}` : "";
+    badge.title = `${m.message || m.state}${next}${m.estimate ? " · estimated from the clock" : " · from NSE"}`;
+  } catch (e) {
+    badge.textContent = "Market ?";
+    badge.className = "pill neutral";
   }
+  return App.market;
+}
+App.refreshMarket = refreshMarket;
+
+// Refresh every 30 s while the market is open; every 5 min when closed (prices don't change).
+function refreshEveryMs() { return App.market && !App.market.open ? 300000 : 30000; }
+
+function scheduleRefresh() {
+  clearTimeout(App.timer);
+  if (!$("#autorefresh").checked) return;
+  App.timer = setTimeout(async () => {
+    if (!document.hidden && (await refreshStatus())) {
+      await refreshMarket();
+      await loadChain(true);
+    }
+    scheduleRefresh();
+  }, refreshEveryMs());
 }
 $("#autorefresh").addEventListener("change", scheduleRefresh);
 
 (async function init() {
   const online = await refreshStatus();
+  await refreshMarket();
   if (!online) showBanner("No internet connection: connect to the internet to load live market data.", "info");
   scheduleRefresh();
   $("#controls").requestSubmit();

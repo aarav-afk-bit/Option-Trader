@@ -18,6 +18,11 @@ def status(manager: ProviderManager = Depends(get_manager)) -> dict:
     return manager.status()
 
 
+@router.get("/market")
+def market(manager: ProviderManager = Depends(get_manager)) -> dict:
+    return manager.market_status()
+
+
 @router.get("/expiries")
 def expiries(symbol: str, source: Optional[str] = None,
              manager: ProviderManager = Depends(get_manager)) -> dict:

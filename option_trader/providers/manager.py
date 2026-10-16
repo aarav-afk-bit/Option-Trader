@@ -238,3 +238,34 @@ class ProviderManager:
                 for p in self.providers
             ],
         }
+
+    def market_status(self) -> dict:
+        """Current NSE session: NSE's own status when reachable, else a labelled clock estimate."""
+        from ..market_hours import clock_session
+
+        cached = self._cached(("market",))
+        if cached is not None:
+            return cached  # type: ignore[return-value]
+        now = utcnow()
+        nse = next((p for p in self.providers if p.name == "nse"), None)
+        holidays = None
+        result = None
+        if nse is not None and hasattr(nse, "get_market_status") and self.is_online():
+            try:
+                result = nse.get_market_status()  # type: ignore[attr-defined]
+            except DataUnavailableError as exc:
+                log.info("NSE market status unavailable: %s", exc)
+            try:
+                holidays = nse.get_holidays()  # type: ignore[attr-defined]
+            except DataUnavailableError as exc:
+                log.info("NSE holiday list unavailable: %s", exc)
+        clock = clock_session(now, holidays)
+        if result is None:
+            result = clock
+        else:
+            result["next_open"] = clock["next_open"] if not result["open"] else None
+            result["closes_at"] = clock["closes_at"] if result["open"] else None
+        with self._lock:
+            # Session state changes slowly; refresh at most once a minute.
+            self._cache[("market",)] = _CacheEntry(result, time.time() + max(0.0, 60 - self.cache_ttl))
+        return result
