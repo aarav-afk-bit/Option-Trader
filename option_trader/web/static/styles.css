@@ -115,3 +115,8 @@ td.top-oi { outline: 1px solid var(--amber); outline-offset: -2px; }
 /* ---------- watchlist ---------- */
 table.watch td:first-child a { color: var(--accent); font-weight: 600; cursor: pointer; }
 table.watch td.err { color: var(--red); white-space: normal; }
+
+.file-btn { display: inline-flex; flex-direction: row; align-items: center; cursor: pointer; color: var(--text);
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 14px; }
+#pnl-table td, #pnl-table th { text-align: right; }
+#pnl-table tr.spot-row td { background: var(--atm); font-weight: 600; }

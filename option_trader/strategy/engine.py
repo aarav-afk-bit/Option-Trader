@@ -157,6 +157,32 @@ def bs_price_vec(s: np.ndarray, k: float, t: float, r: float, sigma: float,
     return k * disc * norm.cdf(-d2) - s * norm.cdf(-d1)
 
 
+def greeks_vec(s: np.ndarray, k: float, t: float, r: float, sigma: float,
+               option_type: str) -> dict[str, np.ndarray]:
+    """Vectorised Black-Scholes Greeks (theta per day, vega per vol point)."""
+    s = np.asarray(s, dtype=float)
+    if t <= 0 or sigma <= 0:
+        itm = s > k if option_type == "CE" else s < k
+        delta = np.where(itm, 1.0 if option_type == "CE" else -1.0, 0.0)
+        zero = np.zeros_like(s)
+        return {"delta": delta, "gamma": zero, "theta": zero, "vega": zero}
+    sqrt_t = math.sqrt(t)
+    d1 = (np.log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
+    d2 = d1 - sigma * sqrt_t
+    pdf = norm.pdf(d1)
+    disc = math.exp(-r * t)
+    gamma = pdf / (s * sigma * sqrt_t)
+    vega = s * pdf * sqrt_t / 100.0
+    common = -s * pdf * sigma / (2 * sqrt_t)
+    if option_type == "CE":
+        delta = norm.cdf(d1)
+        theta = common - r * k * disc * norm.cdf(d2)
+    else:
+        delta = norm.cdf(d1) - 1.0
+        theta = common + r * k * disc * norm.cdf(-d2)
+    return {"delta": delta, "gamma": gamma, "theta": theta / 365.0, "vega": vega}
+
+
 def _leg_value(leg: Leg, s: np.ndarray, at: datetime, r: float, iv: float) -> np.ndarray:
     """Per-unit value of the leg's instrument at time ``at`` across prices ``s``."""
     if leg.option_type == "FUT":
@@ -267,6 +293,21 @@ def analyze(strategy: Strategy, spot: float, r: float = 0.065, now: Optional[dat
         for k in agg:
             agg[k] += qty * getattr(g, k)
 
+    # Position Greeks across the price range (today, shifted IV), sampled for charting.
+    idx = np.unique(np.linspace(0, len(s) - 1, min(81, len(s))).astype(int))
+    xs = s[idx]
+    tot = {k: np.zeros_like(xs) for k in ("delta", "gamma", "theta", "vega")}
+    for leg, iv in zip(strategy.legs, shifted):
+        qty = leg.sign * leg.lots * strategy.lot_size
+        if leg.option_type == "FUT":
+            tot["delta"] += qty
+            continue
+        g = greeks_vec(xs, leg.strike, _years(now, leg.expiry_datetime()), r, iv, leg.option_type)
+        for k in tot:
+            tot[k] += qty * g[k]
+    curve = {"prices": [round(float(x), 4) for x in xs]}
+    curve.update({k: [round(float(v), 5) for v in arr] for k, arr in tot.items()})
+
     reward_risk = None
     if not unlimited_profit and not unlimited_loss and max_loss < 0:
         reward_risk = round(max_profit / abs(max_loss), 3)
@@ -293,4 +334,5 @@ def analyze(strategy: Strategy, spot: float, r: float = 0.065, now: Optional[dat
         "pop": _probability_of_profit(s, at_expiry, spot, _years(now, first_expiry), r, pop_vol),
         "greeks": {k: round(v, 4) for k, v in agg.items()},
         "current_pnl": round(float(np.interp(spot, s, today)), 2),
+        "greeks_curve": curve,
     }
