@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "option-trader"
+version = "0.1.0"
+description = "Real-data options chain analysis, signals and strategy builder for NSE and other markets"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "requests>=2.31",
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "scipy>=1.11",
+    "yfinance>=0.2.40",
+    "pyotp>=2.9",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+option-trader = "option_trader.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["option_trader*"]
+
+[tool.setuptools.package-data]
+option_trader = ["web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
