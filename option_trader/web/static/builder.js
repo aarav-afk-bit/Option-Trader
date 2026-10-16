@@ -285,6 +285,8 @@
     $(id).addEventListener("input", () => { updateScenarioLabels(); scheduleAnalyze(); });
   }
 
+  App.builderLegs = () => ({ name: state.name, legs: state.legs.map((l) => ({ ...l, strike: Number(l.strike) || 0 })) });
+
   App.addLeg = (leg) => { addLeg(leg); App.showBanner(`Added ${leg.action} ${leg.strike} ${leg.option_type} to the Strategy Builder`, "info"); setTimeout(() => App.showBanner(null), 2500); };
   App.openStrategy = (name, legs) => setLegs(name, legs.map((l) => ({ ...l, premium: null })));
   // Plotly cannot size a chart inside a hidden tab: redraw when the builder becomes visible.

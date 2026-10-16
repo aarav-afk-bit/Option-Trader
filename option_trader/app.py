@@ -11,17 +11,20 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
-from .api import analytics, market, strategies
+from .api import analytics, market, portfolio, strategies
 from .config import get_settings
 from .providers.manager import ProviderManager
+from .portfolio.store import PortfolioStore
 from .strategy.store import StrategyStore
 
 
 def create_app(manager: Optional[ProviderManager] = None,
-               store: Optional[StrategyStore] = None) -> FastAPI:
+               store: Optional[StrategyStore] = None,
+               portfolio_store: Optional[PortfolioStore] = None) -> FastAPI:
     app = FastAPI(title="Option Trader", version=__version__)
     app.state.manager = manager or ProviderManager.from_settings()
     app.state.store = store or StrategyStore(get_settings().data_dir / "strategies.json")
+    app.state.portfolio = portfolio_store or PortfolioStore(get_settings().data_dir / "portfolio.json")
 
     @app.get("/api/health")
     def health() -> dict:
@@ -30,6 +33,7 @@ def create_app(manager: Optional[ProviderManager] = None,
     app.include_router(market.router)
     app.include_router(strategies.router)
     app.include_router(analytics.router)
+    app.include_router(portfolio.router)
 
     static_dir = Path(__file__).parent / "web" / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")

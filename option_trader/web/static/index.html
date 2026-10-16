@@ -49,6 +49,7 @@
   <button class="tab" data-tab="charts">Charts</button>
   <button class="tab" data-tab="signals">Signals &amp; Ideas</button>
   <button class="tab" data-tab="builder">Strategy Builder</button>
+  <button class="tab" data-tab="portfolio">Paper Portfolio</button>
 </nav>
 
 <main>
@@ -173,7 +174,8 @@
             <select id="save-view"><option>any</option><option>bullish</option><option>bearish</option><option>neutral</option><option>volatile</option></select>
           </label>
           <label>Notes <input id="save-desc" maxlength="300"></label>
-          <div class="row"><button id="save-btn" class="primary">Save strategy</button></div>
+          <div class="row"><button id="save-btn" class="primary">Save strategy</button>
+            <button id="paper-btn" title="Open these legs as a paper position at live prices">Paper trade this</button></div>
           <p id="save-msg" class="muted"></p>
         </div>
       </div>
@@ -182,6 +184,17 @@
         <div id="builder-stats" class="cards"></div>
       </div>
     </div>
+  </section>
+  <section id="tab-portfolio" class="panel">
+    <div class="row">
+      <button id="pf-refresh" class="primary">Refresh prices</button>
+      <label>Fill when closing
+        <select id="pf-fill"><option value="ltp">LTP</option><option value="mid">Mid</option><option value="market">Bid/Ask</option></select>
+      </label>
+      <span id="pf-summary" class="muted"></span>
+    </div>
+    <div id="pf-list"><p class="muted">No paper positions yet. Build a strategy and press “Paper trade this”.</p></div>
+    <p class="muted">Paper trades are opened, valued and closed at live chain prices. No real orders are placed.</p>
   </section>
 </main>
 
@@ -194,5 +207,6 @@
 <script src="/static/builder.js"></script>
 <script src="/static/charts.js"></script>
 <script src="/static/watchlist.js"></script>
+<script src="/static/portfolio.js"></script>
 </body>
 </html>
