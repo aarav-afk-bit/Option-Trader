@@ -9,6 +9,7 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Option Trader</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23121821%22/%3E%3Cpath d=%22M4 24 L12 14 L18 19 L28 7%22 stroke=%22%2322c55e%22 stroke-width=%223%22 fill=%22none%22/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -51,14 +52,35 @@
 <main>
   <section id="tab-chain" class="panel active">
     <div class="meta" id="chain-meta"></div>
+    <div class="row chain-tools">
+      <label>Strikes around ATM
+        <select id="strike-window">
+          <option value="5">±5</option><option value="10" selected>±10</option><option value="15">±15</option>
+          <option value="25">±25</option><option value="0">All</option>
+        </select>
+      </label>
+      <span class="muted">Columns:</span>
+      <label class="inline"><input type="checkbox" data-col="oi" checked> OI</label>
+      <label class="inline"><input type="checkbox" data-col="vol" checked> Volume</label>
+      <label class="inline"><input type="checkbox" data-col="iv" checked> IV</label>
+      <label class="inline"><input type="checkbox" data-col="greeks" checked> Delta</label>
+      <label class="inline"><input type="checkbox" data-col="greeks2"> Gamma/Theta/Vega</label>
+      <label class="inline"><input type="checkbox" data-col="quote" checked> Bid/Ask</label>
+      <button id="jump-atm" type="button">Jump to ATM</button>
+      <button id="export-csv" type="button">Export CSV</button>
+    </div>
     <div class="table-wrap">
       <table id="chain-table" class="chain">
         <thead>
-          <tr class="side-head"><th colspan="8">CALLS</th><th></th><th colspan="8">PUTS</th></tr>
+          <tr class="side-head"><th colspan="11" class="side-cell">CALLS</th><th></th><th colspan="11" class="side-cell">PUTS</th></tr>
           <tr>
-            <th>OI</th><th>Chg OI</th><th>Volume</th><th>IV</th><th>Delta</th><th>Bid</th><th>Ask</th><th>LTP</th>
+            <th class="c-oi">OI</th><th class="c-oi">Chg OI</th><th class="c-vol">Volume</th><th class="c-iv">IV</th>
+            <th class="c-greeks2">Vega</th><th class="c-greeks2">Theta</th><th class="c-greeks2">Gamma</th><th class="c-greeks">Delta</th>
+            <th class="c-quote">Bid</th><th class="c-quote">Ask</th><th>LTP</th>
             <th class="strike">Strike</th>
-            <th>LTP</th><th>Bid</th><th>Ask</th><th>Delta</th><th>IV</th><th>Volume</th><th>Chg OI</th><th>OI</th>
+            <th>LTP</th><th class="c-quote">Bid</th><th class="c-quote">Ask</th><th class="c-greeks">Delta</th>
+            <th class="c-greeks2">Gamma</th><th class="c-greeks2">Theta</th><th class="c-greeks2">Vega</th>
+            <th class="c-iv">IV</th><th class="c-vol">Volume</th><th class="c-oi">Chg OI</th><th class="c-oi">OI</th>
           </tr>
         </thead>
         <tbody></tbody>

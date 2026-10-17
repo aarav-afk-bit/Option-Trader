@@ -133,15 +133,22 @@ function renderChain(ch) {
     ${App.market && !App.market.open ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
     ${ch.notes.map((n) => `<span class="muted">${esc(n)}</span>`).join("")}`;
 
-  const maxOI = Math.max(1, ...ch.rows.flatMap((r) => [r.call?.oi || 0, r.put?.oi || 0]));
-  const oiCell = (q, side) => {
-    const w = q && q.oi ? (q.oi / maxOI) * 100 : 0;
-    return `<td class="oi-cell"><div class="oi-bar ${side}" style="width:${w}%"></div><span>${fmtInt(q?.oi)}</span></td>`;
-  };
-  const ltpCell = (q, type, strike) =>
-    q && q.ltp ? `<td class="ltp" data-type="${type}" data-strike="${strike}" title="Add to Strategy Builder">${fmt(q.ltp)}</td>` : `<td>${fmt(q?.ltp)}</td>`;
+  const win = Number($("#strike-window").value);
+  const atmIdx = ch.rows.findIndex((r) => r.strike === ch.atm_strike);
+  const visible = win > 0 ? ch.rows.slice(Math.max(0, atmIdx - win), atmIdx + win + 1) : ch.rows;
 
-  const rows = ch.rows.map((r) => {
+  const maxOI = Math.max(1, ...ch.rows.flatMap((r) => [r.call?.oi || 0, r.put?.oi || 0]));
+  // Top-3 open-interest strikes per side are highlighted: they are the market's key levels.
+  const topOI = (side) => new Set([...ch.rows].filter((r) => r[side]?.oi).sort((a, b) => b[side].oi - a[side].oi).slice(0, 3).map((r) => r.strike));
+  const topCall = topOI("call"), topPut = topOI("put");
+  const oiCell = (q, side, top) => {
+    const w = q && q.oi ? (q.oi / maxOI) * 100 : 0;
+    return `<td class="oi-cell c-oi ${top ? "top-oi" : ""}"><div class="oi-bar ${side}" style="width:${w}%"></div><span>${fmtInt(q?.oi)}</span></td>`;
+  };
+  const ltpCell = (q, type, strike, itm) =>
+    q && q.ltp ? `<td class="ltp ${itm}" data-type="${type}" data-strike="${strike}" title="Add to Strategy Builder (Shift+click to sell)">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
+
+  const rows = visible.map((r) => {
     const c = r.call, p = r.put;
     const atm = r.strike === ch.atm_strike ? "atm" : "";
     const citm = r.strike < ch.spot ? "itm" : "";
@@ -149,29 +156,105 @@ function renderChain(ch) {
     const tdC = (v, extra = "") => `<td class="${citm} ${extra}">${v}</td>`;
     const tdP = (v, extra = "") => `<td class="${pitm} ${extra}">${v}</td>`;
     return `<tr class="${atm}">
-      ${oiCell(c, "call")}
-      ${tdC(fmtInt(c?.oi_change), signCls(c?.oi_change))}
-      ${tdC(fmtInt(c?.volume))}
-      ${tdC(pct(c?.iv))}
-      ${tdC(fmt(c?.delta, 2))}
-      ${tdC(fmt(c?.bid))}
-      ${tdC(fmt(c?.ask))}
-      ${ltpCell(c, "CE", r.strike)}
+      ${oiCell(c, "call", topCall.has(r.strike))}
+      ${tdC(fmtInt(c?.oi_change), "c-oi " + signCls(c?.oi_change))}
+      ${tdC(fmtInt(c?.volume), "c-vol")}
+      ${tdC(pct(c?.iv), "c-iv")}
+      ${tdC(fmt(c?.vega, 2), "c-greeks2")}
+      ${tdC(fmt(c?.theta, 2), "c-greeks2")}
+      ${tdC(fmt(c?.gamma, 5), "c-greeks2")}
+      ${tdC(fmt(c?.delta, 2), "c-greeks")}
+      ${tdC(fmt(c?.bid), "c-quote")}
+      ${tdC(fmt(c?.ask), "c-quote")}
+      ${ltpCell(c, "CE", r.strike, citm)}
       <td class="strike">${fmt(r.strike, r.strike % 1 ? 2 : 0)}</td>
-      ${ltpCell(p, "PE", r.strike)}
-      ${tdP(fmt(p?.bid))}
-      ${tdP(fmt(p?.ask))}
-      ${tdP(fmt(p?.delta, 2))}
-      ${tdP(pct(p?.iv))}
-      ${tdP(fmtInt(p?.volume))}
-      ${tdP(fmtInt(p?.oi_change), signCls(p?.oi_change))}
-      ${oiCell(p, "put")}
+      ${ltpCell(p, "PE", r.strike, pitm)}
+      ${tdP(fmt(p?.bid), "c-quote")}
+      ${tdP(fmt(p?.ask), "c-quote")}
+      ${tdP(fmt(p?.delta, 2), "c-greeks")}
+      ${tdP(fmt(p?.gamma, 5), "c-greeks2")}
+      ${tdP(fmt(p?.theta, 2), "c-greeks2")}
+      ${tdP(fmt(p?.vega, 2), "c-greeks2")}
+      ${tdP(pct(p?.iv), "c-iv")}
+      ${tdP(fmtInt(p?.volume), "c-vol")}
+      ${tdP(fmtInt(p?.oi_change), "c-oi " + signCls(p?.oi_change))}
+      ${oiCell(p, "put", topPut.has(r.strike))}
     </tr>`;
   });
   $("#chain-table tbody").innerHTML = rows.join("");
-  const atmRow = $("#chain-table tr.atm");
-  if (atmRow && !App._scrolled) { atmRow.scrollIntoView({ block: "center" }); App._scrolled = true; }
+  updateSideColspans();
+  if (!App._scrolled) { jumpToATM(); App._scrolled = true; }
 }
+
+/* ---------------- chain table tools ---------------- */
+const PREF_KEY = "ot-chain-prefs";
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch (_) { return {}; }
+}
+function savePrefs() {
+  const cols = {};
+  $$(".chain-tools input[data-col]").forEach((cb) => { cols[cb.dataset.col] = cb.checked; });
+  try { localStorage.setItem(PREF_KEY, JSON.stringify({ window: $("#strike-window").value, cols })); } catch (_) { /* ignore */ }
+}
+function applyColumns() {
+  $$(".chain-tools input[data-col]").forEach((cb) => $("#chain-table").classList.toggle("hide-" + cb.dataset.col, !cb.checked));
+  updateSideColspans();
+}
+function updateSideColspans() {
+  // Keep the CALLS / PUTS header spanning exactly the visible columns of each side.
+  const headRow = $$("#chain-table thead tr")[1];
+  const cells = Array.from(headRow.children);
+  const strikeAt = cells.findIndex((c) => c.classList.contains("strike"));
+  const shown = (c) => getComputedStyle(c).display !== "none";
+  const left = cells.slice(0, strikeAt).filter(shown).length;
+  const right = cells.slice(strikeAt + 1).filter(shown).length;
+  const sides = $$("#chain-table .side-cell");
+  sides[0].colSpan = left; sides[1].colSpan = right;
+}
+function jumpToATM() {
+  const atmRow = $("#chain-table tr.atm");
+  if (atmRow) atmRow.scrollIntoView({ block: "center" });
+}
+
+function chainToCSV(ch) {
+  const head = ["strike", "call_oi", "call_oi_change", "call_volume", "call_iv", "call_delta", "call_bid", "call_ask", "call_ltp",
+    "put_ltp", "put_bid", "put_ask", "put_delta", "put_iv", "put_volume", "put_oi_change", "put_oi"];
+  const v = (x) => (x === null || x === undefined ? "" : x);
+  const lines = [
+    `# ${ch.symbol} expiry ${ch.expiry} spot ${ch.spot} source ${ch.source} fetched ${ch.fetched_at}${ch.exchange_timestamp ? " exchange " + ch.exchange_timestamp : ""}`,
+    head.join(","),
+  ];
+  for (const r of ch.rows) {
+    const c = r.call || {}, p = r.put || {};
+    lines.push([r.strike, c.oi, c.oi_change, c.volume, c.iv, c.delta, c.bid, c.ask, c.ltp,
+      p.ltp, p.bid, p.ask, p.delta, p.iv, p.volume, p.oi_change, p.oi].map(v).join(","));
+  }
+  return lines.join("\n") + "\n";
+}
+App.chainToCSV = chainToCSV;
+
+$("#export-csv").addEventListener("click", () => {
+  if (!App.chain) { showBanner("Load a live option chain first."); return; }
+  const ch = App.chain;
+  const blob = new Blob([chainToCSV(ch)], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${ch.symbol}_${ch.expiry}_${ch.source}_${ch.fetched_at.slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$("#jump-atm").addEventListener("click", jumpToATM);
+$("#strike-window").addEventListener("change", () => { savePrefs(); if (App.chain) { App._scrolled = false; renderChain(App.chain); } });
+$$(".chain-tools input[data-col]").forEach((cb) => cb.addEventListener("change", () => { savePrefs(); applyColumns(); }));
+(function restorePrefs() {
+  const prefs = loadPrefs();
+  if (prefs.window) $("#strike-window").value = prefs.window;
+  for (const [col, on] of Object.entries(prefs.cols || {})) {
+    const cb = $(`.chain-tools input[data-col="${col}"]`);
+    if (cb) cb.checked = on;
+  }
+  applyColumns();
+})();
 
 $("#chain-table").addEventListener("click", (ev) => {
   const td = ev.target.closest("td.ltp");
