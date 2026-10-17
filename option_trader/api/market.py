@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+import asyncio
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from ..errors import DataUnavailableError
 from ..providers.manager import ProviderManager
@@ -57,3 +61,39 @@ def history(symbol: str, period: str = "1y", interval: str = "1d",
             for c in candles
         ],
     }
+
+
+@router.get("/stream")
+async def stream(request: Request, symbol: str, expiry: Optional[str] = None, source: Optional[str] = None,
+                 manager: ProviderManager = Depends(get_manager)):
+    """Server-Sent Events: pushes the chain each time a live exchange tick changes it."""
+    exp = parse_expiry(expiry)
+
+    async def events():
+        if manager.live is None:
+            reason = ("Live ticks need Angel One credentials (ANGEL_API_KEY, ANGEL_CLIENT_CODE, ANGEL_PIN, "
+                      "ANGEL_TOTP_SECRET). Showing polled snapshots instead.")
+            yield f"event: status\ndata: {json.dumps({'live': False, 'reason': reason})}\n\n"
+            return
+        last_version, last_beat = -1, 0.0
+        loop = asyncio.get_running_loop()
+        while not await request.is_disconnected():
+            version = manager.live.version
+            if version != last_version:
+                try:
+                    ch = await asyncio.to_thread(manager.get_chain, symbol, exp, source)
+                except DataUnavailableError as exc:
+                    yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+                    await asyncio.sleep(5)
+                    continue
+                last_version = version
+                yield f"event: chain\ndata: {json.dumps(ch.to_dict())}\n\n"
+                yield f"event: status\ndata: {json.dumps({'live': True, **manager.live.status()})}\n\n"
+                last_beat = loop.time()
+            elif loop.time() - last_beat > 15:
+                yield f"event: status\ndata: {json.dumps({'live': True, **manager.live.status()})}\n\n"
+                last_beat = loop.time()
+            await asyncio.sleep(1.0)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

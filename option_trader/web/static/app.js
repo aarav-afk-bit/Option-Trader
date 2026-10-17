@@ -99,6 +99,7 @@ async function loadExpiries() {
 }
 
 function clearChain() {
+  stopStream();
   App.chain = null;
   $("#chain-table tbody").innerHTML = "";
   $("#chain-meta").innerHTML = "";
@@ -112,7 +113,8 @@ async function loadChain(refresh = false) {
     App.chain = data;
     showBanner(null);
     renderChain(data);
-    App.listeners.forEach((fn) => fn(data));
+    App.listeners.forEach((fn) => fn(data, { live: false }));
+    startStream();
   } catch (e) {
     // Never keep showing old numbers as if they were live.
     clearChain();
@@ -120,6 +122,71 @@ async function loadChain(refresh = false) {
   }
 }
 App.loadChain = loadChain;
+
+/* ---------------- live ticks (Server-Sent Events) ---------------- */
+App.stream = null;
+App.streamKey = null;
+let pendingLive = null, liveRenderTimer = null;
+
+function setLiveBadge(state, title) {
+  const b = $("#live-badge");
+  b.className = "pill " + (state === "live" ? "bullish live-pulse" : state === "connecting" ? "neutral" : "bearish");
+  b.textContent = state === "live" ? "LIVE ticks" : state === "connecting" ? "Connecting…" : "Snapshot";
+  b.title = title || "";
+}
+
+function applyLive() {
+  liveRenderTimer = null;
+  if (!pendingLive) return;
+  const data = pendingLive;
+  pendingLive = null;
+  App.chain = data;
+  renderChain(data);
+  App.listeners.forEach((fn) => fn(data, { live: true }));
+}
+
+function startStream() {
+  const p = App.params();
+  const ch = App.chain;
+  if (!ch || !window.EventSource) return;
+  const key = [ch.symbol, ch.expiry, p.source || ""].join("|");
+  if (App.stream && App.streamKey === key) return;
+  stopStream();
+  App.streamKey = key;
+  setLiveBadge("connecting", "Connecting to the live exchange feed");
+  const es = new EventSource("/api/stream?" + qs({ symbol: ch.symbol, expiry: ch.expiry, source: p.source }));
+  App.stream = es;
+  es.addEventListener("chain", (ev) => {
+    const data = JSON.parse(ev.data);
+    if (!App.chain || data.symbol !== App.chain.symbol || data.expiry !== App.chain.expiry) return;
+    pendingLive = data;
+    // Coalesce bursts of ticks into at most one re-render per second.
+    if (!liveRenderTimer) liveRenderTimer = setTimeout(applyLive, 1000);
+  });
+  es.addEventListener("status", (ev) => {
+    const st = JSON.parse(ev.data);
+    if (!st.live) {
+      setLiveBadge("off", st.reason);
+      es.close();
+      App.stream = null;
+      return;
+    }
+    const fresh = st.last_tick_at && Date.now() - new Date(st.last_tick_at).getTime() < 60000;
+    if (st.connected && fresh) setLiveBadge("live", `Angel One feed · ${st.subscribed_tokens} contracts · last tick ${new Date(st.last_tick_at).toLocaleTimeString()}`);
+    else if (st.connected) setLiveBadge("connecting", "Connected; waiting for ticks (none arrive while the market is closed)");
+    else setLiveBadge("off", st.error ? `Feed error: ${st.error}` : "Live feed disconnected; retrying");
+  });
+  es.addEventListener("error", () => {
+    if (es.readyState === EventSource.CLOSED) setLiveBadge("off", "Live stream closed");
+  });
+}
+
+function stopStream() {
+  if (App.stream) App.stream.close();
+  App.stream = null;
+  App.streamKey = null;
+}
+App.startStream = startStream;
 
 function renderChain(ch) {
   const ts = new Date(ch.fetched_at).toLocaleTimeString();
@@ -129,8 +196,9 @@ function renderChain(ch) {
     <span>Expiry <b>${esc(ch.expiry)}</b></span>
     <span>Lot size <b>${ch.lot_size ?? "–"}</b></span>
     <span>Source <b>${esc(ch.source.toUpperCase())}</b></span>
-    <span>Fetched <b>${esc(ts)}</b>${ch.exchange_timestamp ? ` · exchange time <b>${esc(ch.exchange_timestamp)}</b>` : ""}</span>
-    ${App.market && !App.market.open ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
+    ${ch.live_at ? `<span class="pill bullish">Live tick ${esc(new Date(ch.live_at).toLocaleTimeString())}</span>` : ""}
+    <span>Snapshot <b>${esc(ts)}</b>${ch.exchange_timestamp ? ` · exchange time <b>${esc(ch.exchange_timestamp)}</b>` : ""}</span>
+    ${App.market && !App.market.open && !(ch.live_at && Date.now() - new Date(ch.live_at).getTime() < 120000) ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
     ${ch.notes.map((n) => `<span class="muted">${esc(n)}</span>`).join("")}`;
 
   const win = Number($("#strike-window").value);
@@ -145,8 +213,18 @@ function renderChain(ch) {
     const w = q && q.oi ? (q.oi / maxOI) * 100 : 0;
     return `<td class="oi-cell c-oi ${top ? "top-oi" : ""}"><div class="oi-bar ${side}" style="width:${w}%"></div><span>${fmtInt(q?.oi)}</span></td>`;
   };
+  // Flash cells whose price moved since the last render of the same chain.
+  const sameChain = App._prev && App._prev.key === `${ch.symbol}|${ch.expiry}`;
+  const prev = sameChain ? App._prev.ltp : {};
+  const nextLtp = {};
+  const flash = (q, type, strike) => {
+    if (!q || !q.ltp) return "";
+    const k = strike + type, old = prev[k];
+    nextLtp[k] = q.ltp;
+    return old === undefined || old === q.ltp ? "" : q.ltp > old ? "flash-up" : "flash-down";
+  };
   const ltpCell = (q, type, strike, itm) =>
-    q && q.ltp ? `<td class="ltp ${itm}" data-type="${type}" data-strike="${strike}" title="Add to Strategy Builder (Shift+click to sell)">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
+    q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)}" data-type="${type}" data-strike="${strike}" title="Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
 
   const rows = visible.map((r) => {
     const c = r.call, p = r.put;
@@ -182,6 +260,7 @@ function renderChain(ch) {
     </tr>`;
   });
   $("#chain-table tbody").innerHTML = rows.join("");
+  App._prev = { key: `${ch.symbol}|${ch.expiry}`, ltp: { ...prev, ...nextLtp } };
   updateSideColspans();
   if (!App._scrolled) { jumpToATM(); App._scrolled = true; }
 }

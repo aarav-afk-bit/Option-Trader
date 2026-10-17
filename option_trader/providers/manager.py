@@ -56,6 +56,7 @@ class ProviderManager:
     providers: list[DataProvider]
     cache_ttl: float = 30.0
     risk_free_rate: float = 0.065
+    live: Optional[object] = None  # LiveHub when real-time ticks are available
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
 
@@ -84,8 +85,16 @@ class ProviderManager:
             "yahoo": YahooProvider,
             "angelone": lambda: AngelOneProvider(settings),
         }
-        return cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
-                   risk_free_rate=settings.risk_free_rate)
+        mgr = cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
+                  risk_free_rate=settings.risk_free_rate)
+        angel = next((p for p in mgr.providers if p.name == "angelone" and p.is_configured()), None)
+        if angel is None and settings.angel_configured:
+            angel = AngelOneProvider(settings)  # stream ticks even if Angel isn't a snapshot source
+        if angel is not None and settings.live_ticks:
+            from ..live import LiveHub
+
+            mgr.live = LiveHub(angel, risk_free_rate=settings.risk_free_rate)
+        return mgr
 
     # -- helpers ----------------------------------------------------------------------------
     def provider(self, name: str) -> DataProvider:
@@ -212,7 +221,7 @@ class ProviderManager:
         symbol = normalize_symbol(symbol)
         key = ("chain", symbol, expiry, source)
         if use_cache and (hit := self._cached(key)) is not None:
-            return hit  # type: ignore[return-value]
+            return self._apply_live(hit)  # type: ignore[arg-type]
 
         def fetch():
             chain = self._try_each(
@@ -223,7 +232,15 @@ class ProviderManager:
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
 
-        return self._single_flight(key, fetch)  # type: ignore[return-value]
+        return self._apply_live(self._single_flight(key, fetch))  # type: ignore[arg-type]
+
+    def _apply_live(self, chain: OptionChain) -> OptionChain:
+        if self.live is not None:
+            try:
+                self.live.apply(chain)  # type: ignore[attr-defined]
+            except Exception as exc:  # never let the tick overlay break snapshot delivery
+                log.warning("Live tick overlay failed: %s", exc)
+        return chain
 
     def get_expiries(self, symbol: str, source: Optional[str] = None) -> tuple[str, list[date]]:
         symbol = normalize_symbol(symbol)
@@ -255,6 +272,7 @@ class ProviderManager:
     def status(self) -> dict:
         return {
             "online": self.is_online(),
+            "live": self.live.status() if self.live is not None else None,  # type: ignore[attr-defined]
             "providers": [
                 {
                     "name": p.name,

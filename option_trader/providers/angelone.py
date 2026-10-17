@@ -107,6 +107,7 @@ class AngelOneProvider(DataProvider):
         self._http = session or requests.Session()
         self._timeout = timeout
         self._jwt: Optional[str] = None
+        self._feed_token: Optional[str] = None
         self._jwt_day: Optional[date] = None
         self._master: Optional[InstrumentMaster] = None
         self._master_day: Optional[date] = None
@@ -150,6 +151,7 @@ class AngelOneProvider(DataProvider):
         if not token:
             raise DataUnavailableError("Angel One login returned no session token")
         self._jwt = token
+        self._feed_token = (data or {}).get("feedToken")
         self._jwt_day = date.today()
 
     def _raw_post(self, path: str, body: dict) -> Any:
@@ -324,3 +326,18 @@ class _AngelAPIError(DataUnavailableError):
     def __init__(self, message: str, code: str = ""):
         super().__init__(message)
         self.code = code or ""
+
+
+def stream_credentials(provider: "AngelOneProvider") -> dict:
+    """Log in if needed and return what the market-data WebSocket needs."""
+    with provider._lock:
+        if provider._jwt is None or provider._jwt_day != date.today() or not provider._feed_token:
+            provider._login()
+    if not provider._feed_token:
+        raise DataUnavailableError("Angel One login returned no feed token for streaming")
+    return {
+        "jwt": provider._jwt,
+        "api_key": provider.settings.angel_api_key,
+        "client_code": provider.settings.angel_client_code,
+        "feed_token": provider._feed_token,
+    }

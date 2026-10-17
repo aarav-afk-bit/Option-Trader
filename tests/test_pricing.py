@@ -55,3 +55,11 @@ def test_enrich_only_fills_missing():
     assert q.iv is not None and 0.05 < q.iv < 0.5
     assert ch.quote(25000, "PE").iv == src_iv
     assert q.delta is not None and 0 < q.delta < 1
+
+
+def test_enrich_note_not_duplicated():
+    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    for _ in range(3):
+        ch.quote(25000, "CE").iv = None
+        enrich_chain(ch, 0.065, now=datetime(2026, 10, 14, 10, tzinfo=timezone.utc))
+    assert sum(n.startswith("IV solved") for n in ch.notes) == 1
