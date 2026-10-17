@@ -168,6 +168,8 @@ class NSEProvider(DataProvider):
         self._lock = threading.Lock()
         self._lot_sizes: dict[str, int] = {}
         self._lot_sizes_at = 0.0
+        self._holidays: Optional[list[date]] = None
+        self._holidays_day: Optional[date] = None
 
     # -- HTTP -------------------------------------------------------------------------------
     def _get_session(self) -> requests.Session:
@@ -276,3 +278,20 @@ class NSEProvider(DataProvider):
             except requests.RequestException as exc:
                 log.warning("Could not fetch NSE lot sizes: %s", exc)
         return self._lot_sizes.get(normalize_symbol(symbol))
+
+    # -- market session ---------------------------------------------------------------------
+    def get_market_status(self) -> dict:
+        from ..market_hours import parse_nse_market_status
+
+        status = parse_nse_market_status(self._get_json("/api/marketStatus"))
+        if status is None:
+            raise InvalidDataError("NSE marketStatus had no capital-market entry")
+        return status
+
+    def get_holidays(self) -> list[date]:
+        from ..market_hours import parse_nse_holidays
+
+        if self._holidays is None or self._holidays_day != date.today():
+            self._holidays = parse_nse_holidays(self._get_json("/api/holiday-master", {"type": "trading"}))
+            self._holidays_day = date.today()
+        return self._holidays
