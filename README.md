@@ -45,6 +45,14 @@ cp .env.example .env        # optional: Angel One credentials, provider order, r
 python -m option_trader     # then open http://127.0.0.1:8000
 ```
 
+Or use the one-step launchers, which create the virtualenv on first run and open your browser:
+
+- **Windows:** double-click `run.bat`
+- **macOS / Linux:** `./run.sh`
+- **Docker:** `docker build -t option-trader . && docker run -p 8000:8000 --env-file .env -v option-trader-data:/data option-trader`
+
+Useful flags: `python -m option_trader --open --port 8080 --log-level debug`.
+
 Run the tests with `pytest`.
 
 ## Data sources

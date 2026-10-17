@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import socket
+from concurrent.futures import Future
 import threading
 import time
 from dataclasses import dataclass, field
@@ -60,6 +61,9 @@ class ProviderManager:
     def __post_init__(self) -> None:
         self._cache: dict[tuple, _CacheEntry] = {}
         self._lock = threading.Lock()
+        self._inflight: dict[tuple, Future] = {}
+        self._last_call: dict[str, float] = {}
+        self._throttle_lock = threading.Lock()
         self._online: Optional[bool] = None
         self._online_at = 0.0
         for p in self.providers:
@@ -112,6 +116,41 @@ class ProviderManager:
         with self._lock:
             self._cache[key] = _CacheEntry(value, time.time())
 
+    def _single_flight(self, key: tuple, fn: Callable[[], object]):
+        """Run ``fn`` once for concurrent callers asking for the same ``key``.
+
+        Several browser tabs/panels refreshing at once share one upstream request instead of
+        each hitting NSE/Angel (which rate-limit aggressively).
+        """
+        with self._lock:
+            fut = self._inflight.get(key)
+            owner = fut is None
+            if owner:
+                fut = Future()
+                self._inflight[key] = fut
+        if not owner:
+            return fut.result()
+        try:
+            result = fn()
+        except BaseException as exc:
+            fut.set_exception(exc)
+            raise
+        else:
+            fut.set_result(result)
+            return result
+        finally:
+            with self._lock:
+                self._inflight.pop(key, None)
+
+    def _throttle(self, provider: DataProvider) -> None:
+        if provider.min_interval <= 0:
+            return
+        with self._throttle_lock:
+            wait = self._last_call.get(provider.name, 0.0) + provider.min_interval - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            self._last_call[provider.name] = time.monotonic()
+
     def _try_each(self, what: str, source: Optional[str], call: Callable[[DataProvider], object]):
         if not self.is_online():
             raise DataUnavailableError(
@@ -120,6 +159,7 @@ class ProviderManager:
         errors = []
         for p in self._candidates(source):
             try:
+                self._throttle(p)
                 result = call(p)
             except NotImplementedError:
                 continue
@@ -146,23 +186,31 @@ class ProviderManager:
         key = ("chain", symbol, expiry, source)
         if use_cache and (hit := self._cached(key)) is not None:
             return hit  # type: ignore[return-value]
-        chain = self._try_each(
-            f"the {symbol} option chain", source, lambda p: p.get_option_chain(symbol, expiry)
-        )
-        enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
-        self._store(key, chain)
-        return chain  # type: ignore[return-value]
+
+        def fetch():
+            chain = self._try_each(
+                f"the {symbol} option chain", source, lambda p: p.get_option_chain(symbol, expiry)
+            )
+            enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
+            self._store(key, chain)
+            return chain
+
+        return self._single_flight(key, fetch)  # type: ignore[return-value]
 
     def get_expiries(self, symbol: str, source: Optional[str] = None) -> tuple[str, list[date]]:
         symbol = normalize_symbol(symbol)
         key = ("expiries", symbol, source)
         if (hit := self._cached(key)) is not None:
             return hit  # type: ignore[return-value]
-        result = self._try_each(
-            f"{symbol} expiries", source, lambda p: (p.name, p.get_expiries(symbol))
-        )
-        self._store(key, result)
-        return result  # type: ignore[return-value]
+
+        def fetch():
+            result = self._try_each(
+                f"{symbol} expiries", source, lambda p: (p.name, p.get_expiries(symbol))
+            )
+            self._store(key, result)
+            return result
+
+        return self._single_flight(key, fetch)  # type: ignore[return-value]
 
     def get_history(self, symbol: str, period: str = "1y", interval: str = "1d") -> list[Candle]:
         key = ("history", normalize_symbol(symbol), period, interval)

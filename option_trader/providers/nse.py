@@ -159,6 +159,7 @@ def parse_lot_sizes(csv_text: str) -> dict[str, int]:
 
 class NSEProvider(DataProvider):
     name = "nse"
+    min_interval = 1.0  # NSE blocks clients that hammer its API
 
     def __init__(self, session: Optional[requests.Session] = None, timeout: float = 10.0):
         self._session = session
