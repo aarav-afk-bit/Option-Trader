@@ -88,7 +88,7 @@ def analyze_endpoint(body: AnalyzeIn, manager: ProviderManager = Depends(get_man
     now = datetime.now(timezone.utc)
     target = now + timedelta(days=body.target_days) if body.target_days is not None else None
     result = analyze(strategy, chain.spot, manager.risk_free_rate, now=now, target=target,
-                     iv_shift=body.iv_shift, range_pct=body.range_pct)
+                     iv_shift=body.iv_shift, range_pct=body.range_pct, q=chain.carry)
     result["source"] = chain.source
     result["symbol"] = chain.symbol
     result["chain_fetched_at"] = chain.fetched_at.isoformat()
@@ -144,7 +144,7 @@ def build_from_template(template: StrategyTemplate, body: BuildIn, manager: Prov
     now = datetime.now(timezone.utc)
     target = now + timedelta(days=body.target_days) if body.target_days is not None else None
     result = analyze(strategy, chain.spot, manager.risk_free_rate, now=now, target=target,
-                     iv_shift=body.iv_shift, range_pct=body.range_pct)
+                     iv_shift=body.iv_shift, range_pct=body.range_pct, q=chain.carry)
     result.update(source=chain.source, symbol=chain.symbol, template=template.to_dict(),
                   chain_fetched_at=chain.fetched_at.isoformat())
     return result

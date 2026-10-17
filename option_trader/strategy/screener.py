@@ -42,7 +42,7 @@ def screen(chain: OptionChain, templates: list[StrategyTemplate], r: float, view
             except ResolveError:
                 skipped += 1
                 continue
-            res = analyze(st, chain.spot, r)
+            res = analyze(st, chain.spot, r, q=chain.carry)
             if res["unlimited_loss"] and not allow_unlimited_loss:
                 continue
             if max_loss is not None and res["max_loss"] is not None and -res["max_loss"] > max_loss:

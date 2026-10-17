@@ -121,7 +121,7 @@ def _years(start: datetime, end: Optional[datetime]) -> float:
     return max((end - start).total_seconds(), 0.0) / YEAR_SECONDS
 
 
-def _leg_iv(leg: Leg, spot: float, now: datetime, r: float, default_iv: float) -> float:
+def _leg_iv(leg: Leg, spot: float, now: datetime, r: float, default_iv: float, q: float = 0.0) -> float:
     """Volatility used to value the leg before expiry.
 
     Preference: IV implied by the current live price under this model (so a position opened
@@ -132,33 +132,33 @@ def _leg_iv(leg: Leg, spot: float, now: datetime, r: float, default_iv: float) -
         return default_iv
     t = _years(now, leg.expiry_datetime())
     if leg.market_price:
-        solved = implied_vol(leg.market_price, spot, leg.strike, t, r, leg.option_type)
+        solved = implied_vol(leg.market_price, spot, leg.strike, t, r, leg.option_type, q)
         if solved:
             return solved
     if leg.iv:
         return leg.iv
     if leg.premium > 0:
-        solved = implied_vol(leg.premium, spot, leg.strike, t, r, leg.option_type)
+        solved = implied_vol(leg.premium, spot, leg.strike, t, r, leg.option_type, q)
         if solved:
             return solved
     return default_iv
 
 
 def bs_price_vec(s: np.ndarray, k: float, t: float, r: float, sigma: float,
-                 option_type: str) -> np.ndarray:
-    """Vectorised Black-Scholes price over an array of spot prices."""
+                 option_type: str, q: float = 0.0) -> np.ndarray:
+    """Vectorised Black-Scholes-Merton price over an array of spot prices (carry yield q)."""
     s = np.asarray(s, dtype=float)
     vs = sigma * math.sqrt(t)
-    d1 = (np.log(s / k) + (r + 0.5 * sigma * sigma) * t) / vs
+    d1 = (np.log(s / k) + (r - q + 0.5 * sigma * sigma) * t) / vs
     d2 = d1 - vs
-    disc = math.exp(-r * t)
+    disc, dq = math.exp(-r * t), math.exp(-q * t)
     if option_type == "CE":
-        return s * norm.cdf(d1) - k * disc * norm.cdf(d2)
-    return k * disc * norm.cdf(-d2) - s * norm.cdf(-d1)
+        return s * dq * norm.cdf(d1) - k * disc * norm.cdf(d2)
+    return k * disc * norm.cdf(-d2) - s * dq * norm.cdf(-d1)
 
 
 def greeks_vec(s: np.ndarray, k: float, t: float, r: float, sigma: float,
-               option_type: str) -> dict[str, np.ndarray]:
+               option_type: str, q: float = 0.0) -> dict[str, np.ndarray]:
     """Vectorised Black-Scholes Greeks (theta per day, vega per vol point)."""
     s = np.asarray(s, dtype=float)
     if t <= 0 or sigma <= 0:
@@ -167,23 +167,23 @@ def greeks_vec(s: np.ndarray, k: float, t: float, r: float, sigma: float,
         zero = np.zeros_like(s)
         return {"delta": delta, "gamma": zero, "theta": zero, "vega": zero}
     sqrt_t = math.sqrt(t)
-    d1 = (np.log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
+    d1 = (np.log(s / k) + (r - q + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
     d2 = d1 - sigma * sqrt_t
     pdf = norm.pdf(d1)
-    disc = math.exp(-r * t)
-    gamma = pdf / (s * sigma * sqrt_t)
-    vega = s * pdf * sqrt_t / 100.0
-    common = -s * pdf * sigma / (2 * sqrt_t)
+    disc, dq = math.exp(-r * t), math.exp(-q * t)
+    gamma = dq * pdf / (s * sigma * sqrt_t)
+    vega = s * dq * pdf * sqrt_t / 100.0
+    common = -s * dq * pdf * sigma / (2 * sqrt_t)
     if option_type == "CE":
-        delta = norm.cdf(d1)
-        theta = common - r * k * disc * norm.cdf(d2)
+        delta = dq * norm.cdf(d1)
+        theta = common - r * k * disc * norm.cdf(d2) + q * s * dq * norm.cdf(d1)
     else:
-        delta = norm.cdf(d1) - 1.0
-        theta = common + r * k * disc * norm.cdf(-d2)
+        delta = -dq * norm.cdf(-d1)
+        theta = common + r * k * disc * norm.cdf(-d2) - q * s * dq * norm.cdf(-d1)
     return {"delta": delta, "gamma": gamma, "theta": theta / 365.0, "vega": vega}
 
 
-def _leg_value(leg: Leg, s: np.ndarray, at: datetime, r: float, iv: float) -> np.ndarray:
+def _leg_value(leg: Leg, s: np.ndarray, at: datetime, r: float, iv: float, q: float = 0.0) -> np.ndarray:
     """Per-unit value of the leg's instrument at time ``at`` across prices ``s``."""
     if leg.option_type == "FUT":
         return s.astype(float)
@@ -192,15 +192,15 @@ def _leg_value(leg: Leg, s: np.ndarray, at: datetime, r: float, iv: float) -> np
         if leg.option_type == "CE":
             return np.maximum(s - leg.strike, 0.0)
         return np.maximum(leg.strike - s, 0.0)
-    return bs_price_vec(s, leg.strike, t, r, iv, leg.option_type)
+    return bs_price_vec(s, leg.strike, t, r, iv, leg.option_type, q)
 
 
 def pnl_curve(strategy: Strategy, s: np.ndarray, at: datetime, r: float,
-              ivs: list[float]) -> np.ndarray:
+              ivs: list[float], q: float = 0.0) -> np.ndarray:
     total = np.zeros_like(s, dtype=float)
     for leg, iv in zip(strategy.legs, ivs):
         qty = leg.lots * strategy.lot_size
-        total += leg.sign * qty * (_leg_value(leg, s, at, r, iv) - leg.premium)
+        total += leg.sign * qty * (_leg_value(leg, s, at, r, iv, q) - leg.premium)
     return total
 
 
@@ -216,11 +216,11 @@ def _breakevens(s: np.ndarray, pnl: np.ndarray) -> list[float]:
 
 
 def _probability_of_profit(s: np.ndarray, pnl: np.ndarray, spot: float, t: float, r: float,
-                           vol: float) -> Optional[float]:
+                           vol: float, q: float = 0.0) -> Optional[float]:
     if t <= 0 or vol <= 0:
         return None
-    # Lognormal terminal distribution under the risk-neutral drift.
-    mu = math.log(spot) + (r - 0.5 * vol * vol) * t
+    # Lognormal terminal distribution centred on the forward (risk-neutral drift r - q).
+    mu = math.log(spot) + (r - q - 0.5 * vol * vol) * t
     sd = vol * math.sqrt(t)
     edges = np.concatenate(([0.0], (s[1:] + s[:-1]) / 2, [np.inf]))
     with np.errstate(divide="ignore"):
@@ -242,12 +242,12 @@ def price_grid(spot: float, strikes: list[float], range_pct: float = 0.15,
 
 def analyze(strategy: Strategy, spot: float, r: float = 0.065, now: Optional[datetime] = None,
             target: Optional[datetime] = None, iv_shift: float = 0.0, range_pct: float = 0.15,
-            default_iv: float = 0.15, points: int = 401) -> dict:
+            default_iv: float = 0.15, points: int = 401, q: float = 0.0) -> dict:
     """Full payoff analysis of ``strategy`` around the current ``spot``."""
     if not strategy.legs:
         raise ValueError("Strategy has no legs")
     now = now or datetime.now(timezone.utc)
-    ivs = [_leg_iv(leg, spot, now, r, default_iv) for leg in strategy.legs]
+    ivs = [_leg_iv(leg, spot, now, r, default_iv, q) for leg in strategy.legs]
     shifted = [max(v + iv_shift, 0.001) for v in ivs]
 
     expiries = [leg.expiry_datetime() for leg in strategy.legs if leg.option_type != "FUT"]
@@ -258,9 +258,9 @@ def analyze(strategy: Strategy, spot: float, r: float = 0.065, now: Optional[dat
     target = min(max(target, now), first_expiry)
 
     s = price_grid(spot, [leg.strike for leg in strategy.legs], range_pct, points)
-    at_expiry = pnl_curve(strategy, s, first_expiry, r, ivs)
-    today = pnl_curve(strategy, s, now, r, shifted)
-    at_target = pnl_curve(strategy, s, target, r, shifted)
+    at_expiry = pnl_curve(strategy, s, first_expiry, r, ivs, q)
+    today = pnl_curve(strategy, s, now, r, shifted, q)
+    at_target = pnl_curve(strategy, s, target, r, shifted, q)
 
     # Unlimited if the expiry payoff still slopes the profitable/losing way at the grid edges.
     # Slopes are per unit of underlying; far-dated legs valued before their own expiry have
@@ -289,7 +289,7 @@ def analyze(strategy: Strategy, spot: float, r: float = 0.065, now: Optional[dat
         if leg.option_type == "FUT":
             agg["delta"] += qty
             continue
-        g = greeks(spot, leg.strike, _years(now, leg.expiry_datetime()), r, iv, leg.option_type)
+        g = greeks(spot, leg.strike, _years(now, leg.expiry_datetime()), r, iv, leg.option_type, q)
         for k in agg:
             agg[k] += qty * getattr(g, k)
 
@@ -302,7 +302,7 @@ def analyze(strategy: Strategy, spot: float, r: float = 0.065, now: Optional[dat
         if leg.option_type == "FUT":
             tot["delta"] += qty
             continue
-        g = greeks_vec(xs, leg.strike, _years(now, leg.expiry_datetime()), r, iv, leg.option_type)
+        g = greeks_vec(xs, leg.strike, _years(now, leg.expiry_datetime()), r, iv, leg.option_type, q)
         for k in tot:
             tot[k] += qty * g[k]
     curve = {"prices": [round(float(x), 4) for x in xs]}
@@ -331,7 +331,7 @@ def analyze(strategy: Strategy, spot: float, r: float = 0.065, now: Optional[dat
         "net_premium": round(net_premium, 2),
         "premium_type": "credit" if net_premium > 0 else "debit",
         "reward_risk": reward_risk,
-        "pop": _probability_of_profit(s, at_expiry, spot, _years(now, first_expiry), r, pop_vol),
+        "pop": _probability_of_profit(s, at_expiry, spot, _years(now, first_expiry), r, pop_vol, q),
         "greeks": {k: round(v, 4) for k, v in agg.items()},
         "current_pnl": round(float(np.interp(spot, s, today)), 2),
         "greeks_curve": curve,
