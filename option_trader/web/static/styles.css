@@ -104,3 +104,10 @@ input[type="range"] { width: 100%; padding: 0; }
 #chain-table.hide-quote .c-quote { display: none; }
 td.top-oi span { font-weight: 700; }
 td.top-oi { outline: 1px solid var(--amber); outline-offset: -2px; }
+
+/* ---------- charts tab ---------- */
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
+.chart-grid .wide { grid-column: 1 / -1; }
+.chart { height: 330px; }
+.small-btn { font-size: 12px; padding: 2px 8px; margin-left: 8px; }
+@media (max-width: 700px) { .chart-grid { grid-template-columns: 1fr; } }
