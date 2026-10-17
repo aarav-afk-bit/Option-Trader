@@ -56,6 +56,7 @@ class ProviderManager:
     providers: list[DataProvider]
     cache_ttl: float = 30.0
     risk_free_rate: float = 0.065
+    stale_seconds: float = 180.0
     live: Optional[object] = None  # LiveHub when real-time ticks are available
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
@@ -86,7 +87,7 @@ class ProviderManager:
             "angelone": lambda: AngelOneProvider(settings),
         }
         mgr = cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
-                  risk_free_rate=settings.risk_free_rate)
+                  risk_free_rate=settings.risk_free_rate, stale_seconds=settings.stale_seconds)
         angel = next((p for p in mgr.providers if p.name == "angelone" and p.is_configured()), None)
         if angel is None and settings.angel_configured:
             angel = AngelOneProvider(settings)  # stream ticks even if Angel isn't a snapshot source
@@ -187,7 +188,11 @@ class ProviderManager:
                 time.sleep(wait)
             self._last_call[provider.name] = time.monotonic()
 
-    def _try_each(self, what: str, source: Optional[str], call: Callable[[DataProvider], object]):
+    def _try_each(self, what: str, source: Optional[str], call: Callable[[DataProvider], object],
+                  accept: Optional[Callable[[object], bool]] = None):
+        """Return the first source's result; with ``accept``, keep looking past rejected results
+        (e.g. stale prices) and fall back to the first rejected one if nothing better exists."""
+        fallback = None
         if not self.is_online():
             raise DataUnavailableError(
                 "No internet connection: live market data cannot be fetched right now"
@@ -210,7 +215,12 @@ class ProviderManager:
                 errors.append(f"{p.name}: unexpected error {exc!r}")
                 continue
             self.health[p.name].last_success = utcnow().isoformat()
-            return result
+            if accept is None or accept(result):
+                return result
+            if fallback is None:
+                fallback = result
+        if fallback is not None:
+            return fallback
         if not errors:
             raise DataUnavailableError(f"No configured data source can provide {what}")
         raise DataUnavailableError(f"Could not fetch {what} from any source. " + " | ".join(errors))
@@ -225,14 +235,34 @@ class ProviderManager:
 
         def fetch():
             chain = self._try_each(
-                f"the {symbol} option chain", source, lambda p: p.get_option_chain(symbol, expiry)
+                f"the {symbol} option chain", source, lambda p: p.get_option_chain(symbol, expiry),
+                accept=None if source else self._is_fresh,
             )
+            self._flag_staleness(chain)  # type: ignore[arg-type]
             enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
             self._store(key, chain)
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
 
         return self._apply_live(self._single_flight(key, fetch))  # type: ignore[arg-type]
+
+    def _is_fresh(self, chain) -> bool:
+        """During market hours, reject snapshots older than ``stale_seconds`` so the next source
+        is tried. Outside market hours last-traded prices are the current prices."""
+        from ..market_hours import clock_session
+
+        if not clock_session(utcnow())["open"]:
+            return True
+        age = chain.data_age_seconds()
+        return age is None or age <= self.stale_seconds
+
+    def _flag_staleness(self, chain: OptionChain) -> None:
+        if not self._is_fresh(chain):
+            age = chain.data_age_seconds() or 0
+            chain.notes.append(
+                f"Warning: {chain.source.upper()} prices are {age / 60:.0f} min old during market hours "
+                "and no fresher source responded"
+            )
 
     def _apply_live(self, chain: OptionChain) -> OptionChain:
         if self.live is not None:

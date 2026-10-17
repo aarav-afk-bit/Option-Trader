@@ -138,3 +138,7 @@ table.watch td.err { color: var(--red); white-space: normal; }
 td.flash-up { animation: flash-up 1s; } td.flash-down { animation: flash-down 1s; }
 @keyframes flash-up { from { background: rgba(34, 197, 94, .35); } to { background: transparent; } }
 @keyframes flash-down { from { background: rgba(240, 82, 82, .35); } to { background: transparent; } }
+
+td.stale-ltp { font-style: italic; color: var(--muted); }
+.warn { color: var(--amber); }
+#refresh-sec { padding: 2px 4px; font-size: 12px; }

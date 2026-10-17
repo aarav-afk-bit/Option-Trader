@@ -32,7 +32,11 @@
       </select>
     </label>
     <button type="submit" class="primary">Load</button>
-    <label class="inline"><input type="checkbox" id="autorefresh" checked> Auto-refresh</label>
+    <label class="inline"><input type="checkbox" id="autorefresh" checked> Auto-refresh
+      <select id="refresh-sec" title="Snapshot refresh interval while the market is open">
+        <option value="5">5s</option><option value="10">10s</option><option value="15" selected>15s</option>
+        <option value="30">30s</option><option value="60">60s</option>
+      </select></label>
   </form>
   <div class="status">
     <button id="theme-toggle" class="theme-toggle" type="button" title="Switch light/dark theme">☀️</button>
@@ -78,13 +82,13 @@
     <div class="table-wrap">
       <table id="chain-table" class="chain">
         <thead>
-          <tr class="side-head"><th colspan="11" class="side-cell">CALLS</th><th></th><th colspan="11" class="side-cell">PUTS</th></tr>
+          <tr class="side-head"><th colspan="12" class="side-cell">CALLS</th><th></th><th colspan="12" class="side-cell">PUTS</th></tr>
           <tr>
             <th class="c-oi">OI</th><th class="c-oi">Chg OI</th><th class="c-vol">Volume</th><th class="c-iv">IV</th>
             <th class="c-greeks2">Vega</th><th class="c-greeks2">Theta</th><th class="c-greeks2">Gamma</th><th class="c-greeks">Delta</th>
-            <th class="c-quote">Bid</th><th class="c-quote">Ask</th><th>LTP</th>
+            <th class="c-quote" title="Bid/ask spread as % of mid">Spr%</th><th class="c-quote">Bid</th><th class="c-quote">Ask</th><th>LTP</th>
             <th class="strike">Strike</th>
-            <th>LTP</th><th class="c-quote">Bid</th><th class="c-quote">Ask</th><th class="c-greeks">Delta</th>
+            <th>LTP</th><th class="c-quote">Bid</th><th class="c-quote">Ask</th><th class="c-quote" title="Bid/ask spread as % of mid">Spr%</th><th class="c-greeks">Delta</th>
             <th class="c-greeks2">Gamma</th><th class="c-greeks2">Theta</th><th class="c-greeks2">Vega</th>
             <th class="c-iv">IV</th><th class="c-vol">Volume</th><th class="c-oi">Chg OI</th><th class="c-oi">OI</th>
           </tr>

@@ -50,16 +50,35 @@ class OptionQuote:
         return None
 
     @property
+    def ltp_stale(self) -> bool:
+        """True when the last trade is outside the current bid/ask, i.e. no longer tradable."""
+        if not (self.ltp and self.bid and self.ask and self.bid > 0 and self.ask >= self.bid):
+            return False
+        return not (self.bid <= self.ltp <= self.ask)
+
+    @property
+    def spread_pct(self) -> Optional[float]:
+        m = self.mid
+        return round((self.ask - self.bid) / m * 100, 2) if m else None  # type: ignore[operator]
+
+    @property
     def price(self) -> Optional[float]:
-        """Best available traded/quoted price: LTP, else bid/ask mid."""
-        if self.ltp is not None and self.ltp > 0:
+        """Most accurate current premium.
+
+        The last traded price, unless the market has moved away from it (LTP outside the live
+        bid/ask), in which case the bid/ask mid is the price you could actually deal near.
+        """
+        if self.ltp is not None and self.ltp > 0 and not self.ltp_stale:
             return self.ltp
-        return self.mid
+        return self.mid or (self.ltp if self.ltp and self.ltp > 0 else None)
 
     def to_dict(self) -> dict:
         d = asdict(self)
         d["expiry"] = self.expiry.isoformat()
         d["mid"] = self.mid
+        d["price"] = self.price
+        d["ltp_stale"] = self.ltp_stale
+        d["spread_pct"] = self.spread_pct
         return d
 
 
@@ -132,6 +151,27 @@ class OptionChain:
             return self.expiry_at
         return datetime.combine(self.expiry, NSE_EXPIRY_TIME, tzinfo=IST)
 
+    def exchange_time(self) -> Optional[datetime]:
+        """Exchange timestamp of the snapshot (e.g. NSE's '14-Oct-2026 15:30:00', IST)."""
+        if not self.exchange_timestamp:
+            return None
+        for fmt in ("%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(self.exchange_timestamp.strip(), fmt).replace(tzinfo=IST)
+            except ValueError:
+                continue
+        return None
+
+    def data_age_seconds(self, now: Optional[datetime] = None) -> Optional[float]:
+        """Seconds since the exchange produced these prices (live tick time if streaming)."""
+        now = now or datetime.now(timezone.utc)
+        ref = None
+        if self.live_at:
+            ref = datetime.fromisoformat(self.live_at)
+        else:
+            ref = self.exchange_time()
+        return max(0.0, (now - ref).total_seconds()) if ref else None
+
     def years_to_expiry(self, now: Optional[datetime] = None) -> float:
         now = now or datetime.now(timezone.utc)
         seconds = (self.expiry_datetime() - now).total_seconds()
@@ -168,6 +208,7 @@ class OptionChain:
             "strike_step": self.strike_step,
             "notes": self.notes,
             "live_at": self.live_at,
+            "data_age_seconds": self.data_age_seconds(),
             "rows": [r.to_dict() for r in self.rows],
         }
 
