@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from ..errors import DataUnavailableError
 from ..providers.manager import ProviderManager
 from ..strategy.engine import Leg, Strategy, analyze
+from ..strategy.store import StrategyStore, template_from_legs
 from ..strategy.templates import BUILTIN_BY_ID, BUILTIN_TEMPLATES, ResolveError, StrategyTemplate, resolve
 from .deps import get_manager, parse_expiry
 
@@ -106,14 +107,21 @@ class BuildIn(BaseModel):
     range_pct: float = 0.15
 
 
+def get_store(request: Request) -> StrategyStore:
+    return request.app.state.store
+
+
 def lookup_template(template_id: str, request_app) -> StrategyTemplate:
     if template_id in BUILTIN_BY_ID:
         return BUILTIN_BY_ID[template_id]
+    saved = request_app.state.store.get(template_id)
+    if saved:
+        return saved
     raise HTTPException(404, f"No strategy called {template_id!r}")
 
 
 def all_templates(request_app) -> list[StrategyTemplate]:
-    return list(BUILTIN_TEMPLATES)
+    return list(BUILTIN_TEMPLATES) + request_app.state.store.list()
 
 
 def build_from_template(template: StrategyTemplate, body: BuildIn, manager: ProviderManager) -> dict:
@@ -150,3 +158,76 @@ def list_templates(request: Request) -> list[dict]:
 def build_template(template_id: str, body: BuildIn, request: Request,
                    manager: ProviderManager = Depends(get_manager)) -> dict:
     return build_from_template(lookup_template(template_id, request.app), body, manager)
+
+
+class TemplateLegIn(BaseModel):
+    option_type: str
+    action: str
+    offset: int = 0
+    lots: int = 1
+    expiry_offset: int = 0
+
+
+class SaveTemplateIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    legs: list[TemplateLegIn]
+    view: str = "any"
+    description: str = ""
+    tags: list[str] = []
+    id: Optional[str] = None
+    overwrite: bool = True
+
+
+class ConcreteLegIn(BaseModel):
+    option_type: str
+    action: str
+    strike: float = 0.0
+    lots: int = 1
+    expiry: Optional[str] = None
+
+
+class SaveFromLegsIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    symbol: str
+    expiry: Optional[str] = None
+    source: Optional[str] = None
+    legs: list[ConcreteLegIn]
+    view: str = "any"
+    description: str = ""
+    overwrite: bool = True
+
+
+@router.get("/saved")
+def list_saved(store: StrategyStore = Depends(get_store)) -> list[dict]:
+    return [t.to_dict() for t in store.list()]
+
+
+@router.post("/saved")
+def save_template(body: SaveTemplateIn, store: StrategyStore = Depends(get_store)) -> dict:
+    try:
+        tpl = StrategyTemplate.from_dict(body.model_dump())
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return store.save(tpl, overwrite=body.overwrite).to_dict()
+
+
+@router.post("/saved/from-legs")
+def save_from_legs(body: SaveFromLegsIn, store: StrategyStore = Depends(get_store),
+                   manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Save legs picked on a live chain as a strike-relative strategy."""
+    try:
+        chain = manager.get_chain(body.symbol, parse_expiry(body.expiry), body.source)
+        tpl = template_from_legs(body.name, chain, [leg.model_dump() for leg in body.legs],
+                                 body.view, body.description)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return store.save(tpl, overwrite=body.overwrite).to_dict()
+
+
+@router.delete("/saved/{strategy_id}")
+def delete_saved(strategy_id: str, store: StrategyStore = Depends(get_store)) -> dict:
+    if not store.delete(strategy_id):
+        raise HTTPException(404, f"No saved strategy called {strategy_id!r}")
+    return {"deleted": strategy_id}

@@ -8,12 +8,16 @@ from fastapi import FastAPI
 
 from . import __version__
 from .api import market, strategies
+from .config import get_settings
 from .providers.manager import ProviderManager
+from .strategy.store import StrategyStore
 
 
-def create_app(manager: Optional[ProviderManager] = None) -> FastAPI:
+def create_app(manager: Optional[ProviderManager] = None,
+               store: Optional[StrategyStore] = None) -> FastAPI:
     app = FastAPI(title="Option Trader", version=__version__)
     app.state.manager = manager or ProviderManager.from_settings()
+    app.state.store = store or StrategyStore(get_settings().data_dir / "strategies.json")
 
     @app.get("/api/health")
     def health() -> dict:
