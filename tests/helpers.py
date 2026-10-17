@@ -20,8 +20,14 @@ class RecordedNSEProvider(DataProvider):
 
     name = "nse"
 
-    def __init__(self):
+    def __init__(self, candles=None):
         self.calls = 0
+        self.candles = candles
+
+    def get_history(self, symbol, period="1y", interval="1d"):
+        if self.candles is None:
+            raise NotImplementedError
+        return self.candles
 
     def get_expiries(self, symbol):
         return [FIXTURE_EXPIRY, date(2026, 11, 3)]
@@ -32,6 +38,25 @@ class RecordedNSEProvider(DataProvider):
         ch = parse_chain_payload(payload, symbol.upper(), expiry or FIXTURE_EXPIRY)
         ch.lot_size = 75
         return ch
+
+
+def trending_candles(n=260, start=100.0, drift=0.002, seed=7):
+    """Deterministic OHLC series for indicator unit tests (test-only, never used by the app)."""
+    import math
+    import random
+    from datetime import datetime, timedelta, timezone
+
+    from option_trader.models import Candle
+
+    rnd = random.Random(seed)
+    out, px = [], start
+    t0 = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    for i in range(n):
+        o = px
+        px = px * math.exp(drift + rnd.gauss(0, 0.01))
+        hi, lo = max(o, px) * 1.004, min(o, px) * 0.996
+        out.append(Candle(t0 + timedelta(days=i), o, hi, lo, px, 1000))
+    return out
 
 
 class DownProvider(DataProvider):
