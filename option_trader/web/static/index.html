@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="color-scheme" content="dark light">
+  <script>
+    // Apply the saved theme before first paint (dark unless the user picked light).
+    try { if (localStorage.getItem("ot-theme") === "light") document.documentElement.dataset.theme = "light"; } catch (_) {}
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Option Trader</title>
   <link rel="stylesheet" href="/static/styles.css">
@@ -29,6 +34,7 @@
     <label class="inline"><input type="checkbox" id="autorefresh" checked> Auto-refresh</label>
   </form>
   <div class="status">
+    <button id="theme-toggle" class="theme-toggle" type="button" title="Switch light/dark theme">☀️</button>
     <span id="online-dot" class="dot"></span><span id="online-text">checking…</span>
   </div>
 </header>

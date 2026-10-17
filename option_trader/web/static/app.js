@@ -51,6 +51,19 @@ function showBanner(msg, kind = "error") {
 }
 App.showBanner = showBanner;
 
+/* ---------------- theme ---------------- */
+function applyTheme(theme) {
+  if (theme === "light") document.documentElement.dataset.theme = "light";
+  else delete document.documentElement.dataset.theme;
+  $("#theme-toggle").textContent = theme === "light" ? "🌙" : "☀️";
+  $("#theme-toggle").title = theme === "light" ? "Switch to dark mode" : "Switch to light mode";
+  try { localStorage.setItem("ot-theme", theme); } catch (_) { /* storage unavailable */ }
+  window.dispatchEvent(new Event("themechange"));
+}
+App.theme = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
+$("#theme-toggle").addEventListener("click", () => applyTheme(App.theme() === "light" ? "dark" : "light"));
+applyTheme(App.theme());
+
 /* ---------------- connectivity ---------------- */
 async function refreshStatus() {
   const dot = $("#online-dot"), text = $("#online-text");

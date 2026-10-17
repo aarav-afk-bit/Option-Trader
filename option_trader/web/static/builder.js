@@ -221,6 +221,7 @@
       xaxis: { title: "Underlying price", gridcolor: grid, zerolinecolor: grid },
       yaxis: { title: "Profit / loss", gridcolor: grid, zerolinecolor: text, zerolinewidth: 1 },
       hovermode: "x unified",
+      hoverlabel: { bgcolor: cssVar("--panel2"), bordercolor: grid, font: { color: text } },
       legend: { orientation: "h", y: -0.18 },
       shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: "#94a3b8", dash: "dot", width: 1 } }],
       annotations: [{ x: r.spot, yref: "paper", y: 1, text: "Spot", showarrow: false, font: { size: 11 }, yanchor: "bottom" }],
@@ -287,6 +288,8 @@
   App.addLeg = (leg) => { addLeg(leg); App.showBanner(`Added ${leg.action} ${leg.strike} ${leg.option_type} to the Strategy Builder`, "info"); setTimeout(() => App.showBanner(null), 2500); };
   App.openStrategy = (name, legs) => setLegs(name, legs.map((l) => ({ ...l, premium: null })));
   // Plotly cannot size a chart inside a hidden tab: redraw when the builder becomes visible.
+  window.addEventListener("themechange", () => { if (state.lastResult) drawChart(state.lastResult); });
+
   App.onTabShown = (name) => {
     if (name === "builder" && $("#payoff")._fullLayout) requestAnimationFrame(() => Plotly.Plots.resize("payoff"));
   };
