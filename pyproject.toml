@@ -30,7 +30,7 @@ option-trader = "option_trader.__main__:main"
 include = ["option_trader*"]
 
 [tool.setuptools.package-data]
-option_trader = ["web/static/*"]
+option_trader = ["web/static/*", "web/static/vendor/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

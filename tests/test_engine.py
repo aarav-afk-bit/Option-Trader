@@ -108,3 +108,22 @@ def test_vectorised_matches_scalar():
     for t in ("CE", "PE"):
         vec = bs_price_vec(xs, 100, 0.1, 0.065, 0.2, t)
         assert list(vec) == pytest.approx([bs_price(x, 100, 0.1, 0.065, 0.2, t) for x in xs])
+
+
+def test_position_opened_at_market_shows_zero_pnl_today():
+    # Source IV deliberately inconsistent with the price: valuation must follow the price.
+    st = Strategy("LC", [Leg("CE", "BUY", 100, 1, 3.0, EXP, iv=0.5, market_price=3.0)])
+    res = analyze(st, 100, now=NOW)
+    assert res["current_pnl"] == pytest.approx(0, abs=0.01)
+
+
+def test_overridden_entry_price_valued_at_market():
+    st = Strategy("LC", [Leg("CE", "BUY", 100, 1, 2.0, EXP, market_price=3.0)])
+    assert analyze(st, 100, now=NOW)["current_pnl"] == pytest.approx(1.0, abs=0.01)
+
+
+def test_api_current_pnl_zero_for_live_entry():
+    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
+    res = client.post("/api/strategy/analyze", json={"symbol": "NIFTY", "fill": "mid", "legs": [
+        {"option_type": "PE", "action": "BUY", "strike": 25000, "lots": 2}]}).json()
+    assert res["current_pnl"] == pytest.approx(0, abs=1)

@@ -69,3 +69,19 @@ td.ltp:hover { color: var(--accent); }
 table.simple td, table.simple th { text-align: left; }
 .foot { padding: 12px 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
 @media (max-width: 700px) { .controls { gap: 6px; } th, td { padding: 3px 5px; } }
+
+/* ---------- strategy builder ---------- */
+.builder { display: grid; grid-template-columns: minmax(360px, 560px) 1fr; gap: 14px; align-items: start; }
+.builder-side { display: flex; flex-direction: column; gap: 12px; }
+.builder-side .card label { margin-bottom: 6px; }
+.builder-main { min-width: 0; }
+.payoff { height: 520px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+table.legs td, table.legs th { text-align: left; padding: 3px 4px; }
+table.legs select, table.legs input { padding: 3px 4px; width: 100%; min-width: 64px; }
+table.legs td.num input { min-width: 52px; }
+table.legs select[data-k="strike"], table.legs select[data-k="expiry"] { min-width: 84px; }
+table.legs td.live { color: var(--muted); font-size: 12px; }
+table.legs tr.buy td:first-child { border-left: 3px solid var(--green); }
+table.legs tr.sell td:first-child { border-left: 3px solid var(--red); }
+input[type="range"] { width: 100%; padding: 0; }
+@media (max-width: 1000px) { .builder { grid-template-columns: 1fr; } .payoff { height: 380px; } }

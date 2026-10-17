@@ -70,7 +70,8 @@ def build_strategy(body: AnalyzeIn, manager: ProviderManager):
             if not premium:
                 raise HTTPException(400, f"No live price for {raw.strike:g} {otype}")
             leg = Leg(otype, action, raw.strike, raw.lots, float(premium), leg_chain.expiry,  # type: ignore[arg-type]
-                      raw.iv if raw.iv is not None else q.iv, leg_chain.expiry_at)
+                      raw.iv if raw.iv is not None else q.iv, leg_chain.expiry_at,
+                      None if raw.iv is not None else (q.mid or q.price))
         legs.append(leg)
     lot = body.lot_size or chain.lot_size or 1
     return chain, Strategy(body.name, legs, lot)
