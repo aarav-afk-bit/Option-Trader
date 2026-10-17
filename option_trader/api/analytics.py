@@ -7,7 +7,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..analytics.chain import analyze_chain, atm_iv
+from ..analytics.recommender import recommend
 from ..analytics.technicals import technical_snapshot
+from ..strategy.templates import ResolveError
 from ..errors import DataUnavailableError
 from ..providers.manager import ProviderManager
 from .deps import get_manager, parse_expiry
@@ -46,3 +48,28 @@ def technicals(symbol: str, expiry: Optional[str] = None, source: Optional[str] 
         raise HTTPException(422, str(exc)) from exc
     snap.update(symbol=symbol.upper(), candles=len(candles), last_candle=candles[-1].ts.isoformat())
     return snap
+
+
+@router.get("/recommendations")
+def recommendations(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None,
+                    lots: int = 1, manager: ProviderManager = Depends(get_manager)) -> dict:
+    """What to buy/sell right now, derived from the live chain and price history."""
+    try:
+        chain = manager.get_chain(symbol, parse_expiry(expiry), source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    try:
+        candles = manager.get_history(symbol, "1y", "1d")
+    except DataUnavailableError:
+        candles = None
+
+    def later_chain(offset: int):
+        later = [e for e in chain.expiries if e > chain.expiry]
+        if len(later) < offset:
+            raise ResolveError("No later expiry listed")
+        try:
+            return manager.get_chain(symbol, later[offset - 1], chain.source)
+        except DataUnavailableError as exc:
+            raise ResolveError(str(exc)) from exc
+
+    return recommend(chain, candles, manager.risk_free_rate, max(lots, 1), later_chain)
