@@ -342,16 +342,18 @@ class OptimizeIn(ScoreIn):
     max_iters: int = 20
     beam: int = 6
     fill: str = "market"
+    search: str = "auto"  # local (nearby your legs) | global (also every strategy type) | auto
 
 
 @router.post("/optimize")
-def optimize_strategy(body: OptimizeIn, manager: ProviderManager = Depends(get_manager)) -> dict:
+def optimize_strategy(body: OptimizeIn, request: Request, manager: ProviderManager = Depends(get_manager)) -> dict:
     """Move the given legs step by step toward the best win-rate/return blend on live prices."""
     from ..optimizer.objective import prefs_from_dict, prefs_to_dict
-    from ..optimizer.search import Optimizer, spec_of
+    from ..optimizer.search import Optimizer, run_global, spec_of
 
-    if not body.legs:
-        raise HTTPException(400, "Add at least one leg to optimise")
+    search = body.search if body.search in ("local", "global") else ("global" if not body.legs else "local")
+    if not body.legs and search == "local":
+        raise HTTPException(400, "Add at least one leg to optimise, or search all strategy types")
     try:
         chain = manager.get_chain(body.symbol, parse_expiry(body.expiry), body.source)
     except DataUnavailableError as exc:
@@ -365,10 +367,15 @@ def optimize_strategy(body: OptimizeIn, manager: ProviderManager = Depends(get_m
     opt = Optimizer(chain, chain_for, dist, prefs, manager.risk_free_rate,
                     body.fill if body.fill in ("ltp", "mid", "market") else "market")
     start = [spec_of({**leg.model_dump(), "expiry": leg.expiry or chain.expiry.isoformat()}) for leg in body.legs]
+    iters, beam = max(1, min(body.max_iters, 30)), max(1, min(body.beam, 8))
     try:
-        out = opt.run(start, max(1, min(body.max_iters, 30)), max(1, min(body.beam, 8)))
+        if search == "global":
+            out = run_global(opt, start, all_templates(request.app), iters, beam)
+        else:
+            out = opt.run(start, iters, beam)
     except DataUnavailableError as exc:
         raise HTTPException(503, str(exc)) from exc
+    out.update(search=search, rejected_illiquid=opt.rejected_illiquid)
     out.update(distribution=dist.describe(), prefs=prefs_to_dict(prefs), symbol=chain.symbol,
                expiry=chain.expiry.isoformat(), spot=chain.spot, source=chain.source,
                fetched_at=chain.fetched_at.isoformat())

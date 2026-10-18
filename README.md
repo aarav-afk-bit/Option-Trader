@@ -17,6 +17,14 @@ An options-market analysis tool and strategy builder for NSE (and US) options th
   width or ATM shift, edit every leg (side, type, expiry, strike, lots, entry price), and see
   P&L at expiry, today and at a target date (with an IV-change slider). Breakevens, max
   profit/loss, probability of profit and position Greeks update as you edit.
+- **✨ Optimise.** Press Optimise while building a strategy and it moves step by step toward the
+  version with the best blend of win rate and expected profit on the live chain right now (you
+  choose the balance with a slider). It tries moving strikes, changing lots, adding protective
+  wings or premium-collecting legs, and (optionally) starts from every built-in strategy too.
+  Every candidate is priced from live bid/ask, net of charges, and judged by the probability
+  distribution the option chain itself implies (or an auto view from the app's signals, realised
+  volatility, or your own % view). Illiquid strikes are skipped and results must hold up if the
+  market drifts. Apply the result, step through the moves on the payoff graph, or undo.
 - **Save your own strategies.** Saved strategies are stored strike-relative (offsets from
   ATM), so you can immediately put them on any symbol, expiry or a later chain.
 
@@ -116,6 +124,8 @@ For US options use `US:<TICKER>`.
 | `GET /api/analytics/intraday?symbol=&expiry=` | Snapshots recorded from live fetches today |
 | `GET /api/analytics/watchlist?symbols=A,B,C` | Multi-symbol snapshot |
 | `POST /api/strategy/screen` | Rank every strategy on the live chain |
+| `POST /api/strategy/score` | Win rate, expected P&L and optimiser score of given legs |
+| `POST /api/strategy/optimize` | Optimise legs (local or global search) on live prices |
 | `GET /api/portfolio`, `POST /api/portfolio/open`, `POST /api/portfolio/{id}/close`, `DELETE /api/portfolio/{id}` | Paper trading |
 | `GET /api/strategy/templates` | Built-in and saved strategies |
 | `POST /api/strategy/templates/{id}/build` | Place a strategy on the live chain and analyse it |

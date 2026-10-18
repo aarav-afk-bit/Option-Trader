@@ -330,7 +330,10 @@
         allow_unlimited_loss: $("#opt-unlimited").checked,
         max_legs: Number($("#opt-maxlegs").value) || 4,
         max_lots_per_leg: Number($("#opt-maxlots").value) || 3,
+        max_spread_pct: Number($("#opt-spread").value) || 10,
+        robust: $("#opt-robust").checked,
       },
+      search: $("#opt-global").checked ? "global" : "local",
       distribution: { mode: $("#opt-dist").value, drift: (Number($("#opt-drift").value) || 0) / 100 },
       fill: $("#tpl-fill").value === "ltp" ? "market" : $("#tpl-fill").value,
     };
@@ -362,6 +365,7 @@
         ${cmpRow("Charges", a.charges, b.charges, (v) => fmt(v), false)}
       </tbody></table></div>
       <p><b>Legs:</b> ${out.best.legs.map((l) => esc(legLine(l))).join(", ")}</p>
+      ${out.seeds ? `<p class="muted">Searched from: ${out.seeds.map(esc).join(", ")}${out.rejected_illiquid ? ` · skipped ${out.rejected_illiquid} candidates with spreads over ${out.prefs.max_spread_pct}%` : ""}</p>` : ""}
       ${out.steps.length ? `<p class="muted">How it got there (${out.evaluated} live-priced candidates tried):</p>
         <ol class="opt-steps">${out.steps.map((s, i) => `<li data-step="${i}">${esc(s.move)} <span class="muted">→ score ${s.score == null ? "–" : s.score.toFixed(3)}, win ${pctv(s.metrics && s.metrics.win_rate)}</span></li>`).join("")}</ol>` : ""}
       <div class="row">
@@ -409,9 +413,10 @@
 
   async function optimise() {
     const btn = $("#opt-run");
-    if (!App.chain || !state.legs.length) { App.showBanner("Add at least one leg (or pick a strategy) before optimising."); return; }
+    if (!App.chain) { App.showBanner("Load a live option chain first."); return; }
+    if (!state.legs.length && !$("#opt-global").checked) { App.showBanner("Add at least one leg, or tick “Search all strategy types”."); return; }
     btn.disabled = true; btn.textContent = "Optimising…";
-    $("#opt-result").innerHTML = '<p class="muted">Searching nearby strategies on live prices…</p>';
+    $("#opt-result").innerHTML = `<p class="muted">${$("#opt-global").checked ? "Searching every strategy type" : "Searching nearby strategies"} on live prices…</p>`;
     document.getElementById("opt-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
     try {
       optOut = await api("/api/strategy/optimize", { method: "POST", body: JSON.stringify(optBody()) });
