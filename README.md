@@ -66,6 +66,17 @@ Useful flags: `python -m option_trader --open --port 8080 --log-level debug`.
 
 Run the tests with `pytest`.
 
+## Real-time prices
+
+Snapshots from NSE's website refresh every few seconds to a minute, which is as fresh as
+polling can get. For **true tick-by-tick premiums**, add your Angel One SmartAPI credentials:
+the app then opens Angel's market-data WebSocket, subscribes to every contract in the chain you
+are viewing (plus the index), and overlays each exchange tick (last traded price, best bid/ask,
+volume, OI) on the chain as it happens. IV and Greeks are recomputed from the new prices, the
+browser is updated via Server-Sent Events, changed prices flash green/red, and the header shows
+**LIVE ticks**. This works whichever source supplied the snapshot. Without credentials the
+header shows **Snapshot** and the app keeps polling.
+
 ## Data sources
 
 Sources are tried in the order set by `OPTION_TRADER_PROVIDERS` (default `nse,angelone,yahoo`).

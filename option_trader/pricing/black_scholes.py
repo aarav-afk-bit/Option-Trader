@@ -123,6 +123,7 @@ def enrich_chain(chain: OptionChain, r: float, now: Optional[datetime] = None) -
     note = "Greeks computed with Black-Scholes from live prices"
     if note not in chain.notes:
         chain.notes.append(note)
+    chain.notes = [n for n in chain.notes if not n.startswith("IV solved from market prices")]
     if filled:
         chain.notes.append(f"IV solved from market prices for {filled} contracts")
     return chain

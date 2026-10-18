@@ -164,7 +164,7 @@
 
   function scheduleAnalyze(delay = 350) {
     clearTimeout(state.analyzeTimer);
-    state.analyzeTimer = setTimeout(analyzeNow, delay);
+    state.analyzeTimer = setTimeout(() => { state.analyzeTimer = null; analyzeNow(); }, delay);
   }
 
   async function analyzeNow() {
@@ -358,7 +358,18 @@
   };
 
   let targetInitialised = false;
-  App.onChain(() => {
+  App.onChain((data, meta) => {
+    if (meta && meta.live) {
+      // Streaming tick: refresh the live-price column without rebuilding inputs (keeps focus),
+      // and re-analyse at most every few seconds.
+      document.querySelectorAll("#legs-body tr[data-i]").forEach((tr) => {
+        const leg = state.legs[Number(tr.dataset.i)];
+        const cell = tr.querySelector("td.live");
+        if (leg && cell) { const v = liveQuote(leg); cell.textContent = v === null ? "srv" : fmt(v); }
+      });
+      if (!state.analyzeTimer) scheduleAnalyze(3000);
+      return;
+    }
     if (!targetInitialised) {
       // Default the target-date curve to halfway to expiry.
       $("#target-days").max = String(Math.max(0.5, Math.floor(daysToExpiry() * 2) / 2));

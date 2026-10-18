@@ -41,6 +41,7 @@ class OptionQuote:
     theta: Optional[float] = None  # per calendar day
     vega: Optional[float] = None  # per 1 vol point (1%)
     symbol: Optional[str] = None  # source-specific identifier/trading symbol
+    tick_ts: Optional[str] = None  # exchange time of the last streamed tick applied to this quote
 
     @property
     def mid(self) -> Optional[float]:
@@ -91,6 +92,8 @@ class OptionChain:
     notes: list[str] = field(default_factory=list)
     # Exact expiry moment when it differs from NSE's 15:30 IST close (e.g. US options).
     expiry_at: Optional[datetime] = None
+    # Set when streamed exchange ticks have been applied on top of the snapshot.
+    live_at: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.rows.sort(key=lambda r: r.strike)
@@ -164,6 +167,7 @@ class OptionChain:
             "atm_strike": self.atm_strike if self.rows else None,
             "strike_step": self.strike_step,
             "notes": self.notes,
+            "live_at": self.live_at,
             "rows": [r.to_dict() for r in self.rows],
         }
 
