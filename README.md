@@ -37,6 +37,13 @@ An options-market analysis tool and strategy builder for NSE (and US) options th
   mark-to-market P&L, close at live bid/ask. No real orders are sent.
 - **Alerts** on spot, PCR, ATM IV or an option's LTP, with on-page, sound and desktop notifications.
 - **Market-hours aware**: NSE session status and holidays; auto-refresh slows when closed.
+- **Futuristic HUD look that stays easy to read**: neon side panels (navigation on the left,
+  live status HUD on the right), corner-bracket panels, a colour-blind-safe neon chart palette,
+  and normal readable text everywhere except a few accents. Every technical term has a
+  plain-English explanation on hover, a one-line summary explains the chain, and a short guided
+  tour introduces the app. Keyboard shortcuts (1-8, /, R, O, T, ?) and a Ctrl+K command palette.
+  Animations, scanlines and the boot sequence can be switched off with **FX** (off automatically
+  for reduced-motion users).
 - **Dark mode** by default (toggle in the header for light).
 
 ## Real data only

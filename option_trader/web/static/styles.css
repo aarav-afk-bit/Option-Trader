@@ -418,3 +418,58 @@ td.flash-up, td.flash-down { text-shadow: 0 0 8px currentColor; }
 .tour-step { font-family: var(--font-display); font-size: 10px; letter-spacing: .25em; color: var(--accent2); }
 @media (prefers-reduced-motion: reduce) { .tour-spot { transition: none; } }
 .tour-card.neon-panel::after { display: none; }
+
+/* =====================================================================================
+   Motion & FX (all disabled by .fx-off, which is set for prefers-reduced-motion users)
+   ===================================================================================== */
+.fx-toggle { font-family: var(--font-display); font-size: 10px; letter-spacing: .2em; padding: 5px 8px; }
+.fx-toggle.on { color: var(--accent2); border-color: var(--accent2); box-shadow: 0 0 8px rgba(255, 43, 214, .45); }
+
+/* CRT scanlines over the whole UI, very faint */
+html:not(.fx-off) body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 400;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .018) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay; }
+:root[data-theme="light"] body::after { display: none; }
+
+/* logo glitch on hover */
+.brand { position: relative; cursor: default; }
+html:not(.fx-off) .brand:hover::before, html:not(.fx-off) .brand:hover::after {
+  content: attr(data-text); position: absolute; left: 0; top: 0; pointer-events: none; }
+html:not(.fx-off) .brand:hover::before { color: var(--accent2); clip-path: inset(0 0 55% 0); animation: glitch-a .35s steps(2) infinite; }
+html:not(.fx-off) .brand:hover::after { color: var(--violet); clip-path: inset(55% 0 0 0); animation: glitch-b .3s steps(2) infinite; }
+@keyframes glitch-a { 0% { transform: translate(2px, -1px); } 50% { transform: translate(-2px, 1px); } 100% { transform: translate(1px, 0); } }
+@keyframes glitch-b { 0% { transform: translate(-2px, 1px); } 50% { transform: translate(2px, -1px); } 100% { transform: translate(-1px, 0); } }
+
+/* panel reveal when a section opens */
+html:not(.fx-off) .panel.active .card, html:not(.fx-off) .panel.active .table-wrap, html:not(.fx-off) .panel.active .meta {
+  animation: reveal .38s cubic-bezier(.2, .8, .2, 1) both; }
+html:not(.fx-off) .panel.active .card:nth-child(2) { animation-delay: .04s; }
+html:not(.fx-off) .panel.active .card:nth-child(3) { animation-delay: .08s; }
+html:not(.fx-off) .panel.active .card:nth-child(4) { animation-delay: .12s; }
+@keyframes reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* scanning loader */
+tr.scan-row td { text-align: center; padding: 40px 0; border: none; position: relative; overflow: hidden; }
+.scan-text { font-family: var(--font-display); font-size: 12px; letter-spacing: .3em; color: var(--accent); text-transform: uppercase; }
+html:not(.fx-off) tr.scan-row td::after { content: ""; position: absolute; top: 0; bottom: 0; width: 30%; left: -30%;
+  background: linear-gradient(90deg, transparent, rgba(0, 229, 255, .15), transparent); animation: sweep 1.4s linear infinite; }
+@keyframes sweep { to { left: 100%; } }
+
+/* boot sequence */
+.boot { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  background: radial-gradient(700px 400px at 50% 40%, rgba(0, 229, 255, .08), transparent 70%), #03050a; transition: opacity .35s; }
+.boot.boot-out { opacity: 0; }
+.boot-inner { width: min(560px, calc(100vw - 32px)); }
+.boot-logo { font-family: var(--font-display); font-weight: 800; font-size: clamp(22px, 5vw, 34px); letter-spacing: .14em;
+  color: var(--accent); text-shadow: 0 0 8px rgba(0, 229, 255, .8), 0 0 28px rgba(0, 229, 255, .4); margin-bottom: 18px; }
+.boot-logo span { color: var(--accent2); text-shadow: 0 0 10px rgba(255, 43, 214, .8); }
+#boot-log { font-family: var(--font-mono); font-size: 13px; line-height: 1.7; color: var(--muted); min-height: 9em; margin: 0; white-space: pre-wrap; }
+#boot-log .ok { color: var(--green); } #boot-log .bad { color: var(--red); } #boot-log .dim { color: var(--muted); }
+.boot-bar { height: 3px; background: var(--border); margin-top: 14px; overflow: hidden; }
+.boot-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2));
+  box-shadow: 0 0 10px var(--accent); transition: width .3s; }
+.boot-skip { margin-top: 10px; font-size: 12px; color: var(--muted); text-align: right; }
+
+/* everything calm when effects are off */
+html.fx-off .neon-panel::before, html.fx-off .live-pulse { animation: none; }
+html.fx-off td.flash-up, html.fx-off td.flash-down { animation-duration: .01s; }
