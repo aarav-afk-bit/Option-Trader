@@ -336,6 +336,8 @@
     };
   }
 
+  const DIST_LABEL = { implied: "market-implied (from the whole live chain)", auto: "auto (signals + realised vol)",
+    atm: "ATM-IV fair-value", realised: "realised-volatility" };
   const pctv = (v) => (v == null ? "–" : (v * 100).toFixed(1) + "%");
   function cmpRow(label, a, b, f, higherBetter = true) {
     const d = a == null || b == null ? "" : (b > a) === higherBetter && b !== a ? "better" : b !== a ? "worse" : "";
@@ -366,7 +368,8 @@
         ${out.improved ? `<button id="opt-apply" class="primary">Apply</button><button id="opt-animate">Step through on the graph</button>` : ""}
         <button id="opt-undo" ${state.undo.length ? "" : "disabled"}>Undo</button>
       </div>
-      <p class="muted">Win rate and expected P&amp;L are at the nearest expiry, after charges, using the ${esc(out.distribution.kind === "realised" ? "realised-volatility" : "ATM-IV fair-value")} price model${out.distribution.drift ? ` with your ${(out.distribution.drift * 100).toFixed(1)}% view` : ""}. Prices: live ${esc(out.source.toUpperCase())} chain at ${esc(new Date(out.fetched_at).toLocaleTimeString())}. Not a guarantee of future results.</p>`;
+      <p class="muted">Win rate and expected P&amp;L are at the nearest expiry, after charges, using the ${esc(DIST_LABEL[out.distribution.kind] || out.distribution.kind)} price model${out.distribution.drift ? ` with a ${(out.distribution.drift * 100).toFixed(2)}% expected move` : ""}${out.distribution.view ? ` (signals: ${esc(out.distribution.view)})` : ""}.
+        ${(out.distribution.reasons || []).length ? `<br>Why: ${out.distribution.reasons.map(esc).join("; ")}.` : ""} Prices: live ${esc(out.source.toUpperCase())} chain at ${esc(new Date(out.fetched_at).toLocaleTimeString())}. Not a guarantee of future results.</p>`;
     const ap = $("#opt-apply"), an = $("#opt-animate"), un = $("#opt-undo");
     if (ap) ap.addEventListener("click", () => applyLegs("Optimised " + state.name.replace(/^Optimised /, ""), out.best.legs));
     if (an) an.addEventListener("click", () => animate(out));
