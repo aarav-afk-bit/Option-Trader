@@ -245,6 +245,13 @@ function renderChain(ch) {
   const ltpCell = (q, type, strike, itm) =>
     q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)} ${q.ltp_stale ? "stale-ltp" : ""}" data-type="${type}" data-strike="${strike}" title="${q.ltp_stale ? `Last trade ${fmt(q.ltp)} is outside the current bid/ask; the app prices this contract at the mid ${fmt(q.mid)}. ` : ""}Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
 
+  // IV heat: one hue, intensity by IV rank within the visible strikes (sequential encoding).
+  const ivs = visible.flatMap((r) => [r.call?.iv, r.put?.iv]).filter((v) => v);
+  const ivLo = Math.min(...ivs), ivHi = Math.max(...ivs);
+  const ivTd = (q, itm) => {
+    const heat = q && q.iv && ivHi > ivLo ? ((q.iv - ivLo) / (ivHi - ivLo)).toFixed(2) : 0;
+    return `<td class="${itm} c-iv iv-cell" style="--heat:${heat}">${pct(q?.iv)}</td>`;
+  };
   const rows = visible.map((r) => {
     const c = r.call, p = r.put;
     const atm = r.strike === ch.atm_strike ? "atm" : "";
@@ -256,7 +263,7 @@ function renderChain(ch) {
       ${oiCell(c, "call", topCall.has(r.strike))}
       ${tdC(fmtInt(c?.oi_change), "c-oi " + signCls(c?.oi_change))}
       ${tdC(fmtInt(c?.volume), "c-vol")}
-      ${tdC(pct(c?.iv), "c-iv")}
+      ${ivTd(c, citm)}
       ${tdC(fmt(c?.vega, 2), "c-greeks2")}
       ${tdC(fmt(c?.theta, 2), "c-greeks2")}
       ${tdC(fmt(c?.gamma, 5), "c-greeks2")}
@@ -274,7 +281,7 @@ function renderChain(ch) {
       ${tdP(fmt(p?.gamma, 5), "c-greeks2")}
       ${tdP(fmt(p?.theta, 2), "c-greeks2")}
       ${tdP(fmt(p?.vega, 2), "c-greeks2")}
-      ${tdP(pct(p?.iv), "c-iv")}
+      ${ivTd(p, pitm)}
       ${tdP(fmtInt(p?.volume), "c-vol")}
       ${tdP(fmtInt(p?.oi_change), "c-oi " + signCls(p?.oi_change))}
       ${oiCell(p, "put", topPut.has(r.strike))}
@@ -346,6 +353,11 @@ $("#export-csv").addEventListener("click", () => {
 $("#jump-atm").addEventListener("click", jumpToATM);
 $("#strike-window").addEventListener("change", () => { savePrefs(); if (App.chain) { App._scrolled = false; renderChain(App.chain); } });
 $$(".chain-tools input[data-col]").forEach((cb) => cb.addEventListener("change", () => { savePrefs(); applyColumns(); }));
+$("#iv-heat").addEventListener("change", () => {
+  $("#chain-table").classList.toggle("iv-heat", $("#iv-heat").checked);
+  try { localStorage.setItem("ot-ivheat", $("#iv-heat").checked ? "1" : "0"); } catch (_) { /* ignore */ }
+});
+try { if (localStorage.getItem("ot-ivheat") !== "0") { $("#iv-heat").checked = true; $("#chain-table").classList.add("iv-heat"); } } catch (_) { /* ignore */ }
 (function restorePrefs() {
   const prefs = loadPrefs();
   if (prefs.window) $("#strike-window").value = prefs.window;
@@ -466,21 +478,39 @@ App.switchTab = switchTab;
 App.activeTab = () => ($(".tab.active") || {}).dataset?.tab;
 
 /** Plotly layout themed from the current CSS variables. */
+App.css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/** Series colours by role (validated palette in styles.css). */
+App.colors = () => ({
+  s1: App.css("--series-1"), s2: App.css("--series-2"), s3: App.css("--series-3"),
+  profit: App.css("--profit"), loss: App.css("--loss"), accent: App.css("--accent2"),
+  text: App.css("--text"), muted: App.css("--muted"), grid: App.css("--chart-grid"), border: App.css("--border"),
+});
+/** Hex colour with alpha, for fills and glows. */
+App.alpha = (hex, a) => {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+/** Plotly layout themed from the current CSS variables: recessive grid, mono tick labels. */
 App.plotLayout = function (extra = {}) {
-  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const text = css("--text"), grid = css("--border");
+  const c = App.colors();
+  const mono = App.css("--font-mono"), ui = App.css("--font-ui");
   const layout = {
     margin: { l: 60, r: 20, t: 10, b: 45 },
     paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-    font: { color: text, size: 12 },
-    legend: { orientation: "h", y: -0.2 },
+    font: { color: c.muted, size: 12, family: ui },
+    legend: { orientation: "h", y: -0.2, font: { color: c.text } },
     hovermode: "x unified",
-    hoverlabel: { bgcolor: css("--panel2"), bordercolor: grid, font: { color: text } },
+    hoverlabel: { bgcolor: App.css("--panel2"), bordercolor: c.border, font: { color: c.text, family: mono } },
+    bargap: 0.25, bargroupgap: 0.08, barcornerradius: 3,
     ...extra,
   };
-  // Every axis (xaxis, yaxis, yaxis2, ...) gets the themed grid colours unless it sets its own.
+  // Every axis (xaxis, yaxis, yaxis2, ...) gets the recessive grid and mono ticks unless it sets its own.
   for (const key of new Set(["xaxis", "yaxis", ...Object.keys(extra).filter((k) => /^[xy]axis\d*$/.test(k))])) {
-    layout[key] = { gridcolor: grid, zerolinecolor: grid, linecolor: grid, ...(extra[key] || {}) };
+    layout[key] = { gridcolor: c.grid, zerolinecolor: c.border, linecolor: c.border,
+      tickfont: { family: mono, size: 11, color: c.muted }, title: { font: { size: 12, color: c.muted } },
+      ...(extra[key] || {}) };
+    if (extra[key] && typeof extra[key].title === "string") layout[key].title = { text: extra[key].title, font: { size: 12, color: c.muted } };
   }
   return layout;
 };

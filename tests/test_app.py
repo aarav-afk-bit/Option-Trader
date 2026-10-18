@@ -52,3 +52,11 @@ def test_neon_side_panels_present():
     assert 'class="tabs sidebar neon-panel"' in html and 'id="hud-panel"' in html
     assert html.count('class="tab') >= 8 and 'id="cmd"' in html
     assert client.get("/static/hud.js").status_code == 200
+
+
+def test_series_palette_tokens_and_no_dual_axes():
+    client = TestClient(create_app(manager_with()))
+    css = client.get("/static/styles.css").text
+    assert "--series-1: #00a6ba" in css and "--series-1: #0581a3" in css  # dark and light, validated
+    for js in ("charts.js", "builder.js"):
+        assert "overlaying" not in client.get(f"/static/{js}").text  # stacked panels, never two y-scales
