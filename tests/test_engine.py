@@ -127,3 +127,26 @@ def test_api_current_pnl_zero_for_live_entry():
     res = client.post("/api/strategy/analyze", json={"symbol": "NIFTY", "fill": "mid", "legs": [
         {"option_type": "PE", "action": "BUY", "strike": 25000, "lots": 2}]}).json()
     assert res["current_pnl"] == pytest.approx(0, abs=1)
+
+
+def test_greeks_curve():
+    res = analyze(Strategy("LC", [leg("CE", "BUY", 100, 5)]), 100, now=NOW)
+    c = res["greeks_curve"]
+    assert len(c["prices"]) == len(c["delta"]) <= 81
+    assert c["delta"] == sorted(c["delta"])  # long call delta rises with price
+    assert all(g >= 0 for g in c["gamma"])
+
+
+def test_vectorised_greeks_match_scalar():
+    import numpy as np
+
+    from option_trader.pricing import greeks
+    from option_trader.strategy.engine import greeks_vec
+
+    xs = np.array([95.0, 100.0, 108.0])
+    for t in ("CE", "PE"):
+        g = greeks_vec(xs, 100, 0.1, 0.065, 0.2, t)
+        for i, x in enumerate(xs):
+            ref = greeks(x, 100, 0.1, 0.065, 0.2, t)
+            for k in ("delta", "gamma", "theta", "vega"):
+                assert g[k][i] == pytest.approx(getattr(ref, k), rel=1e-9)

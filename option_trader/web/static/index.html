@@ -146,6 +146,10 @@
             <button id="tpl-apply" class="primary">Put on current chain</button>
             <button id="tpl-delete" class="danger hidden">Delete saved</button>
           </div>
+          <div class="row" style="align-items:center">
+            <button id="tpl-export" type="button" title="Download the selected strategy as a file">Export</button>
+            <label class="file-btn">Import <input id="tpl-import" type="file" accept=".json,application/json" hidden></label>
+          </div>
         </div>
         <div class="card">
           <h3>2. Edit legs</h3>
@@ -183,6 +187,13 @@
       <div class="builder-main">
         <div id="payoff" class="payoff"></div>
         <div id="builder-stats" class="cards"></div>
+        <div class="cards">
+          <div class="card"><h3>Position Greeks vs price
+            <select id="greek-pick" class="small-btn"><option value="delta">Delta</option><option value="gamma">Gamma</option>
+              <option value="theta">Theta / day</option><option value="vega">Vega / vol pt</option></select></h3>
+            <div id="greeks-chart" class="chart"></div></div>
+          <div class="card"><h3>P&amp;L at price levels</h3><div class="table-wrap"><table class="simple" id="pnl-table"></table></div></div>
+        </div>
       </div>
     </div>
   </section>

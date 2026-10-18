@@ -192,6 +192,8 @@
       state.lastResult = res;
       drawChart(res);
       drawStats(res);
+      drawGreeks(res);
+      drawPnlTable(res);
     } catch (e) {
       if (seq !== state.seq) return;
       $("#builder-stats").innerHTML = `<div class="banner">Cannot analyse: ${esc(e.message)}</div>`;
@@ -229,6 +231,33 @@
     const el = $("#payoff");
     if (!el._fullLayout) el.innerHTML = ""; // drop the "add legs" placeholder before the first plot
     Plotly.react(el, traces, layout, { responsive: true, displaylogo: false });
+  }
+
+  function interp(xs, ys, x) {
+    if (x <= xs[0]) return ys[0];
+    for (let i = 1; i < xs.length; i++) {
+      if (x <= xs[i]) return ys[i - 1] + ((ys[i] - ys[i - 1]) * (x - xs[i - 1])) / (xs[i] - xs[i - 1]);
+    }
+    return ys[ys.length - 1];
+  }
+
+  function drawGreeks(r) {
+    const k = $("#greek-pick").value, c = r.greeks_curve;
+    Plotly.react("greeks-chart", [{ x: c.prices, y: c[k], mode: "lines", line: { color: "#3b82f6", width: 2 }, name: k }],
+      App.plotLayout({ showlegend: false, xaxis: { title: "Underlying price" },
+        shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: "#94a3b8", dash: "dot", width: 1 } }] }),
+      { responsive: true, displaylogo: false });
+  }
+
+  function drawPnlTable(r) {
+    const steps = [-5, -3, -2, -1, -0.5, 0, 0.5, 1, 2, 3, 5];
+    const targetLabel = new Date(r.target).toLocaleDateString();
+    const rows = steps.map((pc) => {
+      const px = r.spot * (1 + pc / 100);
+      const cell = (ys) => { const v = interp(r.prices, ys, px) + 0; return `<td class="${v >= 0 ? "pos" : "neg"}">${fmt(v, 0)}</td>`; };
+      return `<tr class="${pc === 0 ? "spot-row" : ""}"><td>${pc > 0 ? "+" : ""}${pc}%</td><td>${fmt(px, 0)}</td>${cell(r.pnl_today)}${cell(r.pnl_target)}${cell(r.pnl_expiry)}</tr>`;
+    });
+    $("#pnl-table").innerHTML = `<thead><tr><th>Move</th><th>Price</th><th>Today</th><th>${esc(targetLabel)}</th><th>Expiry</th></tr></thead><tbody>${rows.join("")}</tbody>`;
   }
 
   function drawStats(r) {
@@ -274,7 +303,37 @@
     }
   }
 
+  /* ---------- export / import ---------- */
+  function exportTemplate() {
+    const t = currentTemplate();
+    if (!t) return;
+    const data = { name: t.name, view: t.view, description: t.description, tags: t.tags, legs: t.legs, format: "option-trader-strategy/1" };
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    a.download = `${t.id}.strategy.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function importTemplate(file) {
+    try {
+      const data = JSON.parse(await file.text());
+      const saved = await api("/api/strategy/saved", {
+        method: "POST",
+        body: JSON.stringify({ name: data.name, view: data.view || "any", description: data.description || "",
+          tags: data.tags || [], legs: data.legs, overwrite: false }),
+      });
+      await loadTemplates(saved.id);
+      App.showBanner(`Imported "${saved.name}". Press "Put on current chain" to use it.`, "info");
+    } catch (e) {
+      App.showBanner(`Import failed: ${e.message}`);
+    }
+  }
+
   /* ---------- wiring ---------- */
+  $("#tpl-export").addEventListener("click", exportTemplate);
+  $("#tpl-import").addEventListener("change", (ev) => { if (ev.target.files[0]) importTemplate(ev.target.files[0]); ev.target.value = ""; });
+  $("#greek-pick").addEventListener("change", () => { if (state.lastResult) drawGreeks(state.lastResult); });
   $("#tpl-select").addEventListener("change", describeTemplate);
   $("#tpl-apply").addEventListener("click", applyTemplate);
   $("#tpl-delete").addEventListener("click", deleteTemplate);
@@ -290,10 +349,12 @@
   App.addLeg = (leg) => { addLeg(leg); App.showBanner(`Added ${leg.action} ${leg.strike} ${leg.option_type} to the Strategy Builder`, "info"); setTimeout(() => App.showBanner(null), 2500); };
   App.openStrategy = (name, legs) => setLegs(name, legs.map((l) => ({ ...l, premium: null })));
   // Plotly cannot size a chart inside a hidden tab: redraw when the builder becomes visible.
-  window.addEventListener("themechange", () => { if (state.lastResult) drawChart(state.lastResult); });
+  window.addEventListener("themechange", () => { if (state.lastResult) { drawChart(state.lastResult); drawGreeks(state.lastResult); } });
 
   App.onTabShown = (name) => {
-    if (name === "builder" && $("#payoff")._fullLayout) requestAnimationFrame(() => Plotly.Plots.resize("payoff"));
+    if (name === "builder" && $("#payoff")._fullLayout) {
+      requestAnimationFrame(() => { Plotly.Plots.resize("payoff"); if ($("#greeks-chart")._fullLayout) Plotly.Plots.resize("greeks-chart"); });
+    }
   };
 
   let targetInitialised = false;
