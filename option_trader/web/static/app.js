@@ -188,6 +188,13 @@ function stopStream() {
 }
 App.startStream = startStream;
 
+function dayMove(ch) {
+  const idx = (App.indices || []).find((r) => r.symbol === ch.symbol && r.prev_close);
+  if (!idx) return "";
+  const chg = ch.spot - idx.prev_close, pc = (chg / idx.prev_close) * 100;
+  return ` <span class="${signCls(chg)}" title="Change from previous close ${fmt(idx.prev_close)}">${chg >= 0 ? "+" : ""}${fmt(chg)} (${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%)</span>`;
+}
+
 function ageBadge(ch) {
   const age = ch.data_age_seconds;
   if (age == null) return "";
@@ -200,7 +207,7 @@ function ageBadge(ch) {
 function renderChain(ch) {
   const ts = new Date(ch.fetched_at).toLocaleTimeString();
   $("#chain-meta").innerHTML = `
-    <span>Spot <b>${fmt(ch.spot)}</b></span>
+    <span>Spot <b>${fmt(ch.spot)}</b>${dayMove(ch)}</span>
     <span>ATM <b>${fmt(ch.atm_strike, 0)}</b></span>
     ${ch.forward ? `<span title="Futures-equivalent price implied by put-call parity; options are priced off this">Forward <b>${fmt(ch.forward)}</b> <span class="${signCls(ch.forward - ch.spot)}">(${ch.forward >= ch.spot ? "+" : ""}${fmt(ch.forward - ch.spot)})</span></span>` : ""}
     <span>Expiry <b>${esc(ch.expiry)}</b></span>
@@ -496,6 +503,38 @@ $("#controls").addEventListener("submit", async (ev) => {
 $("#expiry").addEventListener("change", () => { App._scrolled = false; loadChain(); });
 $("#source").addEventListener("change", () => $("#controls").requestSubmit());
 
+/* ---------------- index ticker strip ---------------- */
+App.indices = null;
+async function refreshIndices() {
+  const el = $("#ticker");
+  try {
+    const d = await api("/api/indices");
+    App.indices = d.indices;
+    const src = [...new Set(d.indices.map((r) => r.source))].join(", ").toUpperCase();
+    el.innerHTML = d.indices.map((r) => `<span class="tk" ${r.symbol ? `data-symbol="${esc(r.symbol)}" title="Open ${esc(r.symbol)} option chain"` : ""}>
+        <span class="nm">${esc(r.name)}</span><b>${fmt(r.last)}</b>
+        <span class="${signCls(r.change)}">${r.change == null ? "" : (r.change >= 0 ? "▲ +" : "▼ ") + fmt(r.change) + " (" + (r.pct >= 0 ? "+" : "") + r.pct.toFixed(2) + "%)"}</span>
+      </span>`).join("") + `<span class="src">${esc(src)} · ${new Date(d.fetched_at).toLocaleTimeString()}</span>`;
+  } catch (e) {
+    el.innerHTML = `<span class="muted">Index levels unavailable: ${esc(e.message)}</span>`;
+  }
+}
+App.refreshIndices = refreshIndices;
+$("#ticker").addEventListener("click", (ev) => {
+  const tk = ev.target.closest(".tk[data-symbol]");
+  if (!tk) return;
+  $("#symbol").value = tk.dataset.symbol;
+  switchTab("chain");
+  $("#controls").requestSubmit();
+});
+// Index levels refresh every 15 s while the market is open (5 min when closed).
+(function tickerLoop() {
+  setTimeout(async () => {
+    if (!document.hidden) await refreshIndices();
+    tickerLoop();
+  }, App.market && !App.market.open ? 300000 : 15000);
+})();
+
 /* ---------------- market session ---------------- */
 App.market = null;
 async function refreshMarket() {
@@ -543,6 +582,7 @@ try { const r = localStorage.getItem("ot-refresh"); if (r) $("#refresh-sec").val
 (async function init() {
   const online = await refreshStatus();
   await refreshMarket();
+  refreshIndices();
   if (!online) showBanner("No internet connection: connect to the internet to load live market data.", "info");
   scheduleRefresh();
   $("#controls").requestSubmit();

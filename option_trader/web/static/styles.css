@@ -142,3 +142,12 @@ td.flash-up { animation: flash-up 1s; } td.flash-down { animation: flash-down 1s
 td.stale-ltp { font-style: italic; color: var(--muted); }
 .warn { color: var(--amber); }
 #refresh-sec { padding: 2px 4px; font-size: 12px; }
+
+/* ---------- index ticker strip ---------- */
+.ticker { display: flex; gap: 22px; padding: 6px 16px; background: var(--panel2); border-bottom: 1px solid var(--border);
+  overflow-x: auto; white-space: nowrap; font-size: 13px; scrollbar-width: none; }
+.ticker .tk { display: inline-flex; gap: 6px; align-items: baseline; cursor: default; }
+.ticker .tk[data-symbol] { cursor: pointer; }
+.ticker .tk b { font-weight: 600; }
+.ticker .tk .nm { color: var(--muted); font-size: 12px; }
+.ticker .src { color: var(--muted); font-size: 11px; margin-left: auto; }

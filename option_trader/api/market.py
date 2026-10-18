@@ -27,6 +27,16 @@ def market(manager: ProviderManager = Depends(get_manager)) -> dict:
     return manager.market_status()
 
 
+@router.get("/indices")
+def indices(manager: ProviderManager = Depends(get_manager)) -> dict:
+    from ..indices import get_indices
+
+    try:
+        return get_indices(manager)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
 @router.get("/expiries")
 def expiries(symbol: str, source: Optional[str] = None,
              manager: ProviderManager = Depends(get_manager)) -> dict:
