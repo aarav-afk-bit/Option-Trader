@@ -273,3 +273,112 @@ table.opt-compare td:first-child, table.opt-compare th:first-child { text-align:
 ol.opt-steps { margin: 6px 0; padding-left: 20px; font-size: 13px; }
 ol.opt-steps li.active { color: var(--accent); font-weight: 600; }
 .better { color: var(--green); } .worse { color: var(--red); }
+
+/* =====================================================================================
+   Neon side panels: navigation (left) and live HUD (right)
+   ===================================================================================== */
+.shell { display: grid; grid-template-columns: 208px minmax(0, 1fr) 248px; gap: 14px; padding: 14px 14px 0;
+  align-items: start; }
+.shell > main { padding: 0; min-width: 0; }
+body.side-collapsed .shell { grid-template-columns: 58px minmax(0, 1fr) 248px; }
+body.hud-hidden .shell { grid-template-columns: 208px minmax(0, 1fr); }
+body.side-collapsed.hud-hidden .shell { grid-template-columns: 58px minmax(0, 1fr); }
+body.hud-hidden .hud-panel { display: none; }
+
+.neon-panel {
+  --neon: var(--accent); --neon2: var(--accent2);
+  position: sticky; top: 10px; max-height: calc(100vh - 20px); overflow: auto; overflow-x: hidden;
+  border: 1px solid color-mix(in srgb, var(--neon) 55%, transparent); border-radius: 4px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--neon) 9%, transparent), transparent 120px),
+    linear-gradient(180deg, rgba(12, 20, 37, .95), rgba(5, 8, 15, .95));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon) 10%, transparent),
+              0 0 16px color-mix(in srgb, var(--neon) 30%, transparent),
+              inset 0 0 22px color-mix(in srgb, var(--neon) 8%, transparent);
+  scrollbar-width: thin;
+}
+.hud-panel.neon-panel { --neon: var(--accent2); --neon2: var(--accent); }
+/* inner glowing edge facing the content */
+.neon-panel::after { content: ""; position: absolute; top: 10px; bottom: 10px; width: 2px; pointer-events: none;
+  background: linear-gradient(180deg, transparent, var(--neon), var(--neon2), transparent);
+  box-shadow: 0 0 10px var(--neon); opacity: .9; }
+.sidebar.neon-panel::after { right: -1px; }
+.hud-panel.neon-panel::after { left: -1px; }
+/* slow scan line */
+.neon-panel::before { content: ""; position: absolute; left: 0; right: 0; height: 40px; top: -40px; pointer-events: none;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--neon) 16%, transparent), transparent);
+  animation: neon-scan 7s linear infinite; }
+@keyframes neon-scan { to { top: 100%; } }
+:root[data-theme="light"] .neon-panel { background: var(--panel); box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--neon) 25%, transparent); }
+
+.side-title { font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: .3em; color: var(--neon);
+  text-shadow: 0 0 8px var(--neon); padding: 12px 14px 10px; display: flex; align-items: center; gap: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--neon) 30%, transparent); }
+.side-title .slash { color: var(--neon2); text-shadow: 0 0 8px var(--neon2); }
+.side-title .icon-btn { margin-left: auto; padding: 0 7px; font-size: 16px; line-height: 20px; }
+
+/* navigation buttons */
+.tabs.sidebar { display: flex; flex-direction: column; gap: 2px; padding: 0 0 8px; border-bottom: 1px solid color-mix(in srgb, var(--neon) 55%, transparent); flex-wrap: nowrap; }
+.sidebar .tab, .side-btn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none;
+  border-left: 2px solid transparent; border-radius: 0; padding: 9px 12px; color: var(--muted); background: transparent; font-weight: 500; }
+.sidebar .tab:hover:not(:disabled), .side-btn:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--neon) 8%, transparent); box-shadow: none; }
+.sidebar .tab.active { color: var(--neon); border-left-color: var(--neon); text-shadow: 0 0 8px color-mix(in srgb, var(--neon) 70%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--neon) 16%, transparent), transparent); }
+.sidebar .tab.active::after { display: none; }
+.sidebar .tab.active .ico { filter: drop-shadow(0 0 4px var(--neon)); }
+.ico { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sidebar .lbl, .side-btn .lbl { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+kbd { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--border-hi); border-bottom-width: 2px;
+  border-radius: 3px; padding: 0 4px; line-height: 15px; background: rgba(0, 0, 0, .25); white-space: nowrap; }
+.side-foot { margin-top: 10px; border-top: 1px solid color-mix(in srgb, var(--neon) 25%, transparent); padding-top: 6px; }
+body.side-collapsed .sidebar .lbl, body.side-collapsed .sidebar kbd, body.side-collapsed .sidebar .side-title,
+body.side-collapsed .sidebar #alert-count { display: none; }
+body.side-collapsed .sidebar .tab, body.side-collapsed .side-btn { justify-content: center; padding: 11px 0; }
+body.side-collapsed #side-collapse .ico { transform: rotate(180deg); }
+
+/* HUD readouts */
+.hud-clock { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: .08em; color: var(--text);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--neon) 60%, transparent); padding: 12px 14px 2px; display: flex; align-items: baseline; gap: 8px; }
+.hud-clock small { font-family: var(--font-ui); font-size: 11px; color: var(--muted); letter-spacing: .1em; text-shadow: none; }
+.hud-grid { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; padding: 8px 14px; font-size: 13px; }
+.hud-grid > div:nth-child(odd) { color: var(--muted); }
+.hud-grid > div:nth-child(even) { text-align: right; font-family: var(--font-mono); font-size: 12.5px; }
+.hud-sep { height: 1px; margin: 4px 14px; background: linear-gradient(90deg, transparent, var(--neon), transparent); opacity: .5; }
+.hud-symbol { padding: 8px 14px 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.hud-symbol #hud-symbol { color: var(--accent); font-weight: 600; letter-spacing: .04em; }
+.hud-big { font-family: var(--font-mono); font-size: 20px; font-weight: 600; color: var(--text); }
+.hud-keys { padding: 8px 14px 14px; display: grid; gap: 5px; font-size: 12.5px; color: var(--muted); }
+.hud-reopen { position: fixed; right: 0; top: 40%; writing-mode: vertical-rl; padding: 10px 4px; border-radius: 4px 0 0 4px;
+  border-color: var(--accent2); color: var(--accent2); font-family: var(--font-display); font-size: 10px; letter-spacing: .3em;
+  box-shadow: 0 0 12px rgba(255, 43, 214, .4); background: var(--panel); z-index: 20; }
+
+/* command palette */
+.cmd { position: fixed; inset: 0; background: rgba(2, 4, 9, .7); backdrop-filter: blur(3px); z-index: 100;
+  display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.cmd-box.neon-panel { position: relative; top: 0; width: min(620px, calc(100vw - 32px)); max-height: 70vh; padding: 10px; }
+.cmd-box input { width: 100%; font-size: 16px; padding: 10px 12px; }
+#cmd-list { list-style: none; margin: 8px 0 4px; padding: 0; max-height: 46vh; overflow: auto; }
+#cmd-list li { padding: 8px 10px; border-left: 2px solid transparent; cursor: pointer; display: flex; gap: 10px; align-items: center; }
+#cmd-list li .k { margin-left: auto; color: var(--muted); font-size: 12px; }
+#cmd-list li.sel { border-left-color: var(--accent); background: rgba(0, 229, 255, .08); color: var(--accent); }
+.cmd-hint { padding: 2px 4px; }
+
+@media (max-width: 1180px) {
+  .shell, body.side-collapsed .shell { grid-template-columns: 58px minmax(0, 1fr); }
+  .hud-panel { display: none; }
+  .sidebar .lbl, .sidebar kbd, .sidebar .side-title, .sidebar #alert-count { display: none; }
+  .sidebar .tab, .side-btn { justify-content: center; padding: 11px 0; }
+  #side-collapse { display: none; }
+  .hud-reopen { display: none; }
+}
+@media (max-width: 760px) {
+  .shell, body.side-collapsed .shell { display: block; padding: 0; }
+  .shell > main { padding: 12px; }
+  .tabs.sidebar { position: sticky; top: 0; z-index: 30; max-height: none; flex-direction: row; overflow-x: auto; border-radius: 0;
+    border-left: none; border-right: none; padding: 0; }
+  .sidebar .tab { width: auto; flex: 0 0 auto; padding: 10px 12px; border-left: none; border-bottom: 2px solid transparent; }
+  .sidebar .tab.active { border-bottom-color: var(--neon); }
+  .sidebar .lbl { display: inline; }
+  .side-foot, .neon-panel::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .neon-panel::before { animation: none; display: none; } }

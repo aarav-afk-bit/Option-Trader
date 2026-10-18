@@ -44,3 +44,11 @@ def test_design_system_fonts_served():
         assert client.get(f"/static/vendor/fonts/{f}").status_code == 200
     # Body text stays in the normal system font; the display font is only for accents.
     assert '--font-ui: system-ui' in css
+
+
+def test_neon_side_panels_present():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    assert 'class="tabs sidebar neon-panel"' in html and 'id="hud-panel"' in html
+    assert html.count('class="tab') >= 8 and 'id="cmd"' in html
+    assert client.get("/static/hud.js").status_code == 200
