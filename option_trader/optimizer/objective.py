@@ -5,7 +5,8 @@
 * win rate: probability the position is profitable at the near expiry after charges
 * edge: expected P&L per rupee of risk, squashed to 0..1
 
-Hard constraints (max loss, unlimited loss) reject a strategy outright.
+Strategies with a negative expectation are scaled down, so a high win rate bought with rare
+large losses does not win. Hard constraints (max loss, unlimited loss) reject a strategy outright.
 """
 
 from __future__ import annotations
@@ -47,9 +48,12 @@ def evaluate(strategy: Strategy, dist: Distribution, spot: float, r: float, q: f
              now: Optional[datetime] = None, rates: Optional[ChargeRates] = None) -> dict:
     """Metrics of ``strategy`` at its nearest expiry under ``dist`` (all P&L net of charges)."""
     now = now or datetime.now(timezone.utc)
-    ivs = [_leg_iv(leg, spot, now, r, 0.15, q) for leg in strategy.legs]
+    first = _first_expiry(strategy, now)
+    # Legs expiring at the evaluation date are worth intrinsic value: IV only matters for later legs.
+    ivs = [_leg_iv(leg, spot, now, r, 0.15, q) if (leg.expiry_datetime() or first) > first else 0.15
+           for leg in strategy.legs]
     s = dist.prices
-    gross = pnl_curve(strategy, s, _first_expiry(strategy, now), r, ivs, q)
+    gross = pnl_curve(strategy, s, first, r, ivs, q)
     costs = strategy_costs(strategy.to_dict()["legs"], strategy.lot_size, rates)
     pnl = gross - costs["round_trip"]
     p = dist.probs
@@ -94,8 +98,13 @@ def score(metrics: dict, prefs: Preferences) -> Optional[float]:
         return None
     if metrics["win_rate"] < prefs.min_win_rate:
         return None
-    edge_score = 0.5 + 0.5 * math.tanh(3.0 * metrics["edge"])
-    return round(prefs.win_weight * metrics["win_rate"] + (1 - prefs.win_weight) * edge_score, 5)
+    edge_score = 0.5 + 0.5 * math.tanh(8.0 * metrics["edge"])
+    s = prefs.win_weight * metrics["win_rate"] + (1 - prefs.win_weight) * edge_score
+    if metrics["edge"] < 0:
+        # A high win rate with a negative expectation (small wins, big losses) is not a good
+        # trade: scale the score down in proportion to the expected loss per rupee at risk.
+        s *= max(0.1, 1 + 4 * metrics["edge"])
+    return round(s, 5)
 
 
 def prefs_from_dict(d: Optional[dict]) -> Preferences:

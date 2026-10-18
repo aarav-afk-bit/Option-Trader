@@ -68,7 +68,8 @@ def test_unlimited_loss_detection_and_constraints():
 
 def test_win_weight_moves_score_between_goals():
     m = {"unlimited_loss": False, "risk": 100, "win_rate": 0.8, "edge": -0.1}
-    assert score(m, Preferences(win_weight=1.0)) == pytest.approx(0.8)
+    assert score(m, Preferences(win_weight=1.0)) == pytest.approx(0.8 * 0.6)  # negative edge penalty
+    assert score({**m, "edge": 0.0}, Preferences(win_weight=1.0)) == pytest.approx(0.8)
     assert score(m, Preferences(win_weight=0.0)) < 0.5
 
 

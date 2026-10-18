@@ -331,3 +331,40 @@ def score_strategy(body: ScoreIn, manager: ProviderManager = Depends(get_manager
     m = evaluate(strategy, dist, chain.spot, manager.risk_free_rate, chain.carry)
     return {"metrics": m, "score": score(m, prefs), "distribution": dist.describe(),
             "source": chain.source, "symbol": chain.symbol}
+
+
+class OptimizeIn(ScoreIn):
+    max_iters: int = 20
+    beam: int = 6
+    fill: str = "market"
+
+
+@router.post("/optimize")
+def optimize_strategy(body: OptimizeIn, manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Move the given legs step by step toward the best win-rate/return blend on live prices."""
+    from ..optimizer.objective import prefs_from_dict, prefs_to_dict
+    from ..optimizer.search import Optimizer, spec_of
+
+    if not body.legs:
+        raise HTTPException(400, "Add at least one leg to optimise")
+    try:
+        chain = manager.get_chain(body.symbol, parse_expiry(body.expiry), body.source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    dist = make_distribution(chain, manager, body.distribution)
+    prefs = prefs_from_dict(body.prefs)
+
+    def chain_for(exp):
+        return manager.get_chain(body.symbol, exp, chain.source)
+
+    opt = Optimizer(chain, chain_for, dist, prefs, manager.risk_free_rate,
+                    body.fill if body.fill in ("ltp", "mid", "market") else "market")
+    start = [spec_of({**leg.model_dump(), "expiry": leg.expiry or chain.expiry.isoformat()}) for leg in body.legs]
+    try:
+        out = opt.run(start, max(1, min(body.max_iters, 30)), max(1, min(body.beam, 8)))
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    out.update(distribution=dist.describe(), prefs=prefs_to_dict(prefs), symbol=chain.symbol,
+               expiry=chain.expiry.isoformat(), spot=chain.spot, source=chain.source,
+               fetched_at=chain.fetched_at.isoformat())
+    return out
