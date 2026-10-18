@@ -69,3 +69,10 @@ def test_guide_assets():
     js = client.get("/static/guide.js").text
     for term in ('"iv":', '"delta":', '"pcr":', '"max pain":', '"theta":'):
         assert term in js
+
+
+def test_fx_assets_and_reduced_motion_guard():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    assert 'id="fx-toggle"' in html and 'id="boot"' in html and "prefers-reduced-motion" in html
+    assert client.get("/static/fx.js").status_code == 200
