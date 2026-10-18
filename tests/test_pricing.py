@@ -46,15 +46,15 @@ def test_implied_vol_roundtrip_and_bounds():
     assert implied_vol(0, 100, 100, 0.1, 0.05, "CE") is None
 
 
-def test_enrich_only_fills_missing():
+def test_enrich_recomputes_iv_and_keeps_source_iv():
     ch = RecordedNSEProvider().get_option_chain("NIFTY")
-    q = ch.quote(25000, "CE")
-    q.iv = None
     src_iv = ch.quote(25000, "PE").iv
     enrich_chain(ch, 0.065, now=datetime(2026, 10, 14, 10, tzinfo=timezone.utc))
-    assert q.iv is not None and 0.05 < q.iv < 0.5
-    assert ch.quote(25000, "PE").iv == src_iv
-    assert q.delta is not None and 0 < q.delta < 1
+    q = ch.quote(25000, "PE")
+    assert q.source_iv == src_iv
+    assert q.iv is not None and 0.03 < q.iv < 0.5
+    assert q.delta is not None and -1 < q.delta < 0
+    assert ch.forward is not None
 
 
 def test_enrich_note_not_duplicated():
@@ -62,4 +62,4 @@ def test_enrich_note_not_duplicated():
     for _ in range(3):
         ch.quote(25000, "CE").iv = None
         enrich_chain(ch, 0.065, now=datetime(2026, 10, 14, 10, tzinfo=timezone.utc))
-    assert sum(n.startswith("IV solved") for n in ch.notes) == 1
+    assert sum(n.startswith("IV/Greeks computed") for n in ch.notes) == 1

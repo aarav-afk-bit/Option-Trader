@@ -158,7 +158,7 @@ def recommend(chain: OptionChain, candles: Optional[list[Candle]], r: float, lot
                                    chain_for_offset=chain_for_offset)
             except ResolveError:
                 continue
-            res = analyze(strategy, chain.spot, r)
+            res = analyze(strategy, chain.spot, r, q=chain.carry)
             rank = _rank(res, view.direction)
             if best is None or rank > best[0]:
                 best = (rank, res, width)

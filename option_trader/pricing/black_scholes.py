@@ -101,29 +101,39 @@ def implied_vol(price: float, s: float, k: float, t: float, r: float, option_typ
 
 
 def enrich_chain(chain: OptionChain, r: float, now: Optional[datetime] = None) -> OptionChain:
-    """Fill in IV and Greeks that the source did not supply, derived from its real prices.
+    """Compute IV and Greeks for every priced contract from its live price.
 
-    Values the source already provided are left untouched. Quotes with no usable price keep
-    ``None`` rather than receiving an estimate.
+    Pricing uses the market-implied forward (put-call parity) as the underlying, which is how
+    NSE options are actually priced; this keeps IV and Greeks consistent across strikes and
+    correct for dividend-paying stocks. The IV a source published is kept in ``source_iv``.
+    Contracts without a usable price keep the source's IV (if any) and are never estimated.
     """
+    from .forward import carry_yield, implied_forward
+
     t = chain.years_to_expiry(now)
-    filled = 0
+    fwd = implied_forward(chain, r, t)
+    chain.forward = round(fwd, 2) if fwd else None
+    chain.carry = carry_yield(chain.spot, fwd, r, t) if fwd else 0.0
+    q_ = chain.carry
+    solved = 0
     for row in chain.rows:
         for q in (row.call, row.put):
             if q is None:
                 continue
-            if q.iv is None:
-                px = q.mid or q.price
-                if px:
-                    q.iv = implied_vol(px, chain.spot, q.strike, t, r, q.option_type)
-                    filled += q.iv is not None
-            if q.iv and q.delta is None:
-                g = greeks(chain.spot, q.strike, t, r, q.iv, q.option_type)
+            if q.iv is not None and q.source_iv is None:
+                q.source_iv = q.iv
+            px = q.price
+            iv = implied_vol(px, chain.spot, q.strike, t, r, q.option_type, q_) if px else None
+            if iv is not None:
+                q.iv = iv
+                solved += 1
+            elif q.iv is None:
+                q.iv = q.source_iv
+            if q.iv:
+                g = greeks(chain.spot, q.strike, t, r, q.iv, q.option_type, q_)
                 q.delta, q.gamma, q.theta, q.vega = g.delta, g.gamma, g.theta, g.vega
-    note = "Greeks computed with Black-Scholes from live prices"
-    if note not in chain.notes:
-        chain.notes.append(note)
-    chain.notes = [n for n in chain.notes if not n.startswith("IV solved from market prices")]
-    if filled:
-        chain.notes.append(f"IV solved from market prices for {filled} contracts")
+    chain.notes = [n for n in chain.notes
+                   if not n.startswith(("IV solved from market prices", "Greeks computed with", "IV/Greeks computed"))]
+    basis = f" (forward {fwd:,.2f}, from put-call parity)" if fwd else " (spot; forward unavailable)"
+    chain.notes.append(f"IV/Greeks computed with Black-Scholes on the implied forward from live prices{basis}")
     return chain
