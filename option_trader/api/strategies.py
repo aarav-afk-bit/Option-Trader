@@ -287,3 +287,47 @@ def screen_strategies(body: ScreenIn, request: Request,
     out.update(symbol=chain.symbol, expiry=chain.expiry.isoformat(), spot=chain.spot, source=chain.source,
                fetched_at=chain.fetched_at.isoformat())
     return out
+
+
+class DistributionIn(BaseModel):
+    mode: str = "atm"  # atm | realised
+    drift: float = Field(0.0, description="Expected move by expiry, e.g. 0.01 = +1%")
+    vol_mult: float = 1.0
+
+
+class ScoreIn(AnalyzeIn):
+    prefs: dict = {}
+    distribution: DistributionIn = DistributionIn()
+
+
+def make_distribution(chain, manager: ProviderManager, d: DistributionIn):
+    from ..optimizer.context import build_distribution
+
+    candles = None
+    if d.mode == "realised":
+        try:
+            candles = manager.get_history(chain.symbol, "6mo", "1d")
+        except DataUnavailableError as exc:
+            raise HTTPException(503, f"Realised volatility needs price history: {exc}") from exc
+    try:
+        return build_distribution(chain, manager.risk_free_rate, d.mode, d.drift, d.vol_mult, candles)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/score")
+def score_strategy(body: ScoreIn, manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Win rate, expected P&L and optimiser score of the given legs on the live chain."""
+    from ..optimizer.objective import evaluate, prefs_from_dict, score
+
+    if not body.legs:
+        raise HTTPException(400, "Add at least one leg")
+    try:
+        chain, strategy = build_strategy(body, manager)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    dist = make_distribution(chain, manager, body.distribution)
+    prefs = prefs_from_dict(body.prefs)
+    m = evaluate(strategy, dist, chain.spot, manager.risk_free_rate, chain.carry)
+    return {"metrics": m, "score": score(m, prefs), "distribution": dist.describe(),
+            "source": chain.source, "symbol": chain.symbol}
