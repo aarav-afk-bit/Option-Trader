@@ -82,7 +82,8 @@
       { label: "Export option chain to CSV", key: "", run: () => $("#export-csv").click() },
       { label: "Toggle navigation panel", key: "[", run: () => $("#side-collapse").click() },
       { label: "Toggle live status panel", key: "]", run: () => setHud(!document.body.classList.contains("hud-hidden")) },
-      { label: "Show keyboard shortcuts", key: "?", run: showHelp },
+      { label: "Show keyboard shortcuts", key: "", run: showHelp },
+      { label: "Take the guided tour", key: "?", run: () => App.startTour && App.startTour() },
     ];
     const opts = Array.from(document.querySelectorAll("#symbols option")).map((o) => o.value);
     const sym = q.trim().toUpperCase();
@@ -139,7 +140,7 @@
       case "t": case "T": $("#theme-toggle").click(); break;
       case "[": $("#side-collapse").click(); break;
       case "]": setHud(!document.body.classList.contains("hud-hidden")); break;
-      case "?": showHelp(); break;
+      case "?": if (App.startTour) App.startTour(); else showHelp(); break;
       default:
     }
   });

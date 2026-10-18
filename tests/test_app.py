@@ -60,3 +60,12 @@ def test_series_palette_tokens_and_no_dual_axes():
     assert "--series-1: #00a6ba" in css and "--series-1: #0581a3" in css  # dark and light, validated
     for js in ("charts.js", "builder.js"):
         assert "overlaying" not in client.get(f"/static/{js}").text  # stacked panels, never two y-scales
+
+
+def test_guide_assets():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    assert 'id="chain-summary"' in html and 'id="tour-open"' in html
+    js = client.get("/static/guide.js").text
+    for term in ('"iv":', '"delta":', '"pcr":', '"max pain":', '"theta":'):
+        assert term in js
