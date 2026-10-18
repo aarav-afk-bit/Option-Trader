@@ -188,6 +188,15 @@ function stopStream() {
 }
 App.startStream = startStream;
 
+function ageBadge(ch) {
+  const age = ch.data_age_seconds;
+  if (age == null) return "";
+  const open = App.market && App.market.open;
+  const label = age < 90 ? `${Math.round(age)}s` : age < 5400 ? `${Math.round(age / 60)} min` : `${(age / 3600).toFixed(1)} h`;
+  const cls = !open ? "neutral" : age < 30 ? "bullish" : age < 180 ? "neutral" : "bearish";
+  return `<span class="pill ${cls}" title="Time since the exchange produced these prices">Data age ${label}</span>`;
+}
+
 function renderChain(ch) {
   const ts = new Date(ch.fetched_at).toLocaleTimeString();
   $("#chain-meta").innerHTML = `
@@ -197,10 +206,12 @@ function renderChain(ch) {
     <span>Lot size <b>${ch.lot_size ?? "–"}</b></span>
     <span>Source <b>${esc(ch.source.toUpperCase())}</b></span>
     ${ch.live_at ? `<span class="pill bullish">Live tick ${esc(new Date(ch.live_at).toLocaleTimeString())}</span>` : ""}
+    ${ageBadge(ch)}
     <span>Snapshot <b>${esc(ts)}</b>${ch.exchange_timestamp ? ` · exchange time <b>${esc(ch.exchange_timestamp)}</b>` : ""}</span>
     ${App.market && !App.market.open && !(ch.live_at && Date.now() - new Date(ch.live_at).getTime() < 120000) ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
     ${ch.notes.map((n) => `<span class="muted">${esc(n)}</span>`).join("")}`;
 
+  const spreadCls = (v) => (v == null ? "" : v > 5 ? "neg" : v > 2 ? "warn" : "");
   const win = Number($("#strike-window").value);
   const atmIdx = ch.rows.findIndex((r) => r.strike === ch.atm_strike);
   const visible = win > 0 ? ch.rows.slice(Math.max(0, atmIdx - win), atmIdx + win + 1) : ch.rows;
@@ -224,7 +235,7 @@ function renderChain(ch) {
     return old === undefined || old === q.ltp ? "" : q.ltp > old ? "flash-up" : "flash-down";
   };
   const ltpCell = (q, type, strike, itm) =>
-    q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)}" data-type="${type}" data-strike="${strike}" title="Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
+    q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)} ${q.ltp_stale ? "stale-ltp" : ""}" data-type="${type}" data-strike="${strike}" title="${q.ltp_stale ? `Last trade ${fmt(q.ltp)} is outside the current bid/ask; the app prices this contract at the mid ${fmt(q.mid)}. ` : ""}Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
 
   const rows = visible.map((r) => {
     const c = r.call, p = r.put;
@@ -242,6 +253,7 @@ function renderChain(ch) {
       ${tdC(fmt(c?.theta, 2), "c-greeks2")}
       ${tdC(fmt(c?.gamma, 5), "c-greeks2")}
       ${tdC(fmt(c?.delta, 2), "c-greeks")}
+      ${tdC(c?.spread_pct == null ? "–" : c.spread_pct.toFixed(1), "c-quote " + spreadCls(c?.spread_pct))}
       ${tdC(fmt(c?.bid), "c-quote")}
       ${tdC(fmt(c?.ask), "c-quote")}
       ${ltpCell(c, "CE", r.strike, citm)}
@@ -249,6 +261,7 @@ function renderChain(ch) {
       ${ltpCell(p, "PE", r.strike, pitm)}
       ${tdP(fmt(p?.bid), "c-quote")}
       ${tdP(fmt(p?.ask), "c-quote")}
+      ${tdP(p?.spread_pct == null ? "–" : p.spread_pct.toFixed(1), "c-quote " + spreadCls(p?.spread_pct))}
       ${tdP(fmt(p?.delta, 2), "c-greeks")}
       ${tdP(fmt(p?.gamma, 5), "c-greeks2")}
       ${tdP(fmt(p?.theta, 2), "c-greeks2")}
@@ -503,7 +516,10 @@ async function refreshMarket() {
 App.refreshMarket = refreshMarket;
 
 // Refresh every 30 s while the market is open; every 5 min when closed (prices don't change).
-function refreshEveryMs() { return App.market && !App.market.open ? 300000 : 30000; }
+function refreshEveryMs() {
+  if (App.market && !App.market.open) return 300000;
+  return (Number($("#refresh-sec").value) || 15) * 1000;
+}
 
 function scheduleRefresh() {
   clearTimeout(App.timer);
@@ -517,6 +533,11 @@ function scheduleRefresh() {
   }, refreshEveryMs());
 }
 $("#autorefresh").addEventListener("change", scheduleRefresh);
+$("#refresh-sec").addEventListener("change", () => {
+  try { localStorage.setItem("ot-refresh", $("#refresh-sec").value); } catch (_) { /* ignore */ }
+  scheduleRefresh();
+});
+try { const r = localStorage.getItem("ot-refresh"); if (r) $("#refresh-sec").value = r; } catch (_) { /* ignore */ }
 
 (async function init() {
   const online = await refreshStatus();

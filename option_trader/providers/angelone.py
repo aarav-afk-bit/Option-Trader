@@ -273,10 +273,16 @@ class AngelOneProvider(DataProvider):
         greeks = self._greeks(name, expiry)
 
         rows: dict[float, StrikeRow] = {}
+        feed_times = []
         for (strike, opt), rec in wanted.items():
             q = quotes.get(str(rec["token"]))
             if not q:
                 continue
+            if q.get("exchFeedTime"):
+                try:
+                    feed_times.append(datetime.strptime(q["exchFeedTime"], "%d-%b-%Y %H:%M:%S"))
+                except ValueError:
+                    pass
             depth = q.get("depth") or {}
             buy = (depth.get("buy") or [{}])[0]
             sell = (depth.get("sell") or [{}])[0]
@@ -316,6 +322,7 @@ class AngelOneProvider(DataProvider):
             fetched_at=utcnow(),
             lot_size=self.master().lot_sizes.get(name),
             expiries=expiries,
+            exchange_timestamp=max(feed_times).strftime("%d-%b-%Y %H:%M:%S") if feed_times else None,
         )
         if len(contracts) > len(wanted):
             chain.notes.append(f"Showing the {len(strikes)} strikes nearest the money")
