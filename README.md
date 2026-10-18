@@ -20,6 +20,17 @@ An options-market analysis tool and strategy builder for NSE (and US) options th
 - **Save your own strategies.** Saved strategies are stored strike-relative (offsets from
   ATM), so you can immediately put them on any symbol, expiry or a later chain.
 
+- **Charts**: call/put OI and change in OI by strike, IV smile, ATM IV term structure across
+  expiries, and an intraday spot / PCR / ATM IV tracker recorded from each live fetch.
+- **Watchlist** of several underlyings (spot, PCR, ATM IV, straddle, max pain, OI levels, bias).
+- **Screener** that places every built-in and saved strategy on the live chain and ranks them by
+  score, probability of profit, reward:risk, max profit or credit, with max-loss/view filters.
+- **Paper portfolio**: open builder strategies as paper positions at live prices, see live
+  mark-to-market P&L, close at live bid/ask. No real orders are sent.
+- **Alerts** on spot, PCR, ATM IV or an option's LTP, with on-page, sound and desktop notifications.
+- **Market-hours aware**: NSE session status and holidays; auto-refresh slows when closed.
+- **Dark mode** by default (toggle in the header for light).
+
 ## Real data only
 
 The option chain is never simulated, sampled or filled with placeholder values:
@@ -89,6 +100,12 @@ For US options use `US:<TICKER>`.
 | `GET /api/analytics/chain?symbol=` | PCR, max pain, OI levels, build-up, expected move, skew, signals |
 | `GET /api/analytics/technicals?symbol=` | Indicator values, signals, IV vs HV |
 | `GET /api/analytics/recommendations?symbol=&lots=` | Market view and ranked trade ideas |
+| `GET /api/market` | NSE session status (open/closed, next open) |
+| `GET /api/analytics/term-structure?symbol=` | ATM IV and expected move per expiry |
+| `GET /api/analytics/intraday?symbol=&expiry=` | Snapshots recorded from live fetches today |
+| `GET /api/analytics/watchlist?symbols=A,B,C` | Multi-symbol snapshot |
+| `POST /api/strategy/screen` | Rank every strategy on the live chain |
+| `GET /api/portfolio`, `POST /api/portfolio/open`, `POST /api/portfolio/{id}/close`, `DELETE /api/portfolio/{id}` | Paper trading |
 | `GET /api/strategy/templates` | Built-in and saved strategies |
 | `POST /api/strategy/templates/{id}/build` | Place a strategy on the live chain and analyse it |
 | `POST /api/strategy/analyze` | Analyse custom legs (blank premium = live price) |
