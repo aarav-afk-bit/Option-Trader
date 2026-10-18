@@ -166,9 +166,32 @@
           </table></div>
           <div class="row">
             <button id="leg-add">+ Add leg</button>
+            <button id="opt-run" class="primary optimise-btn" title="Move these legs toward the best win rate / profit on live prices">✨ Optimise</button>
             <button id="legs-clear" class="danger">Clear</button>
           </div>
           <p class="muted">Tip: click an LTP in the Option Chain to add a BUY leg (Shift+click to SELL). Blank entry price = live price.</p>
+        </div>
+        <div class="card" id="opt-card">
+          <h3>Optimiser settings</h3>
+          <label><span>Goal: <b id="opt-goal-label">balanced</b></span>
+            <div class="slider-ends"><span>Higher win rate</span><span>Higher profit</span></div>
+            <input id="opt-goal" type="range" min="0" max="100" step="5" value="50"></label>
+          <div class="row">
+            <label>Max loss (₹) <input id="opt-maxloss" type="number" min="0" step="500" placeholder="no limit" style="width:110px"></label>
+            <label>Max legs <input id="opt-maxlegs" type="number" min="1" max="6" value="4" class="small"></label>
+            <label>Max lots/leg <input id="opt-maxlots" type="number" min="1" max="20" value="3" class="small"></label>
+          </div>
+          <div class="row">
+            <label>Price model
+              <select id="opt-dist" title="How the probability of each outcome is estimated">
+                <option value="atm">Fair value (ATM IV)</option>
+                <option value="realised">Realised volatility</option>
+              </select>
+            </label>
+            <label title="Your expected move by expiry; 0 = no view">My view (% by expiry) <input id="opt-drift" type="number" step="0.5" value="0" class="small"></label>
+            <label class="inline"><input type="checkbox" id="opt-unlimited"> Allow unlimited loss</label>
+          </div>
+          <div id="opt-result"></div>
         </div>
         <div class="card">
           <h3>3. Scenario</h3>

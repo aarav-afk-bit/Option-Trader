@@ -62,6 +62,7 @@ def evaluate(strategy: Strategy, dist: Distribution, spot: float, r: float, q: f
     left = (pnl[1] - pnl[0]) / (s[1] - s[0])
     right = (pnl[-1] - pnl[-2]) / (s[-1] - s[-2])
     unlimited_loss = bool(right < -0.05 * qty or left > 0.05 * qty)
+    unlimited_profit = bool(right > 0.05 * qty or left < -0.05 * qty)
     # Loss measured over the distribution's range; for open-ended losses use the 1-in-1000 tails.
     lo_i, hi_i = np.searchsorted(np.cumsum(p), [0.0005, 0.9995])
     window = pnl[lo_i: hi_i + 1] if unlimited_loss else pnl
@@ -82,6 +83,7 @@ def evaluate(strategy: Strategy, dist: Distribution, spot: float, r: float, q: f
         "max_profit": round(float(pnl.max()), 2),
         "max_loss": round(worst, 2),
         "unlimited_loss": unlimited_loss,
+        "unlimited_profit": unlimited_profit,
         "risk": round(risk, 2),
         "edge": round(ev / risk, 4),
         "charges": costs["round_trip"],

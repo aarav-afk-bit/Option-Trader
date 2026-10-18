@@ -42,6 +42,7 @@ def test_fair_priced_call_has_zero_edge_and_known_win_rate():
     want = 1 - __import__("scipy.stats", fromlist=["norm"]).norm.cdf((math.log(be / 100) + 0.5 * sd * sd) / sd)
     assert m["win_rate"] == pytest.approx(want, abs=0.01)
     assert m["max_loss"] == pytest.approx(-px, abs=0.01) and not m["unlimited_loss"]
+    assert m["unlimited_profit"]
 
 
 def test_overpriced_option_gives_seller_positive_edge():

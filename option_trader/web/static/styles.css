@@ -151,3 +151,12 @@ td.stale-ltp { font-style: italic; color: var(--muted); }
 .ticker .tk b { font-weight: 600; }
 .ticker .tk .nm { color: var(--muted); font-size: 12px; }
 .ticker .src { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+/* ---------- optimiser ---------- */
+.optimise-btn { background: linear-gradient(90deg, #7c3aed, #3b82f6); border-color: transparent; }
+.slider-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+table.opt-compare td, table.opt-compare th { text-align: right; }
+table.opt-compare td:first-child, table.opt-compare th:first-child { text-align: left; }
+ol.opt-steps { margin: 6px 0; padding-left: 20px; font-size: 13px; }
+ol.opt-steps li.active { color: var(--accent); font-weight: 600; }
+.better { color: var(--green); } .worse { color: var(--red); }
