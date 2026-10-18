@@ -34,3 +34,13 @@ def test_builder_has_optimise_button():
     client = TestClient(create_app(manager_with()))
     html = client.get("/").text
     assert 'id="opt-run"' in html and 'id="opt-goal"' in html
+
+
+def test_design_system_fonts_served():
+    client = TestClient(create_app(manager_with()))
+    css = client.get("/static/styles.css").text
+    for f in ("orbitron-latin-800-normal.woff2", "jetbrains-mono-latin-400-normal.woff2"):
+        assert f in css
+        assert client.get(f"/static/vendor/fonts/{f}").status_code == 200
+    # Body text stays in the normal system font; the display font is only for accents.
+    assert '--font-ui: system-ui' in css
