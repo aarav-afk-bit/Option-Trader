@@ -28,3 +28,9 @@ def test_dark_theme_is_default():
     root = css[css.index(":root {"):css.index("}", css.index(":root {"))]
     assert "color-scheme: dark" in root
     assert ':root[data-theme="light"]' in css
+
+
+def test_builder_has_optimise_button():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    assert 'id="opt-run"' in html and 'id="opt-goal"' in html

@@ -310,6 +310,119 @@
     }
   }
 
+  /* ---------- optimiser ---------- */
+  state.undo = [];
+  let optOut = null, animTimer = null;
+
+  function goalLabel() {
+    const v = Number($("#opt-goal").value);
+    $("#opt-goal-label").textContent = v <= 20 ? "maximise win rate" : v >= 80 ? "maximise profit" : v < 45 ? "lean win rate" : v > 55 ? "lean profit" : "balanced";
+  }
+
+  function optBody() {
+    const maxLoss = $("#opt-maxloss").value;
+    return {
+      ...App.params(), expiry: App.chain.expiry, name: state.name,
+      legs: state.legs.map((l) => ({ option_type: l.option_type, action: l.action, strike: Number(l.strike) || 0, lots: l.lots, expiry: l.expiry })),
+      prefs: {
+        win_weight: 1 - Number($("#opt-goal").value) / 100,
+        max_loss: maxLoss === "" ? null : Number(maxLoss),
+        allow_unlimited_loss: $("#opt-unlimited").checked,
+        max_legs: Number($("#opt-maxlegs").value) || 4,
+        max_lots_per_leg: Number($("#opt-maxlots").value) || 3,
+      },
+      distribution: { mode: $("#opt-dist").value, drift: (Number($("#opt-drift").value) || 0) / 100 },
+      fill: $("#tpl-fill").value === "ltp" ? "market" : $("#tpl-fill").value,
+    };
+  }
+
+  const pctv = (v) => (v == null ? "–" : (v * 100).toFixed(1) + "%");
+  function cmpRow(label, a, b, f, higherBetter = true) {
+    const d = a == null || b == null ? "" : (b > a) === higherBetter && b !== a ? "better" : b !== a ? "worse" : "";
+    return `<tr><td>${label}</td><td>${a == null ? "–" : f(a)}</td><td class="${d}">${b == null ? "–" : f(b)}</td></tr>`;
+  }
+  const legLine = (l) => `${l.action} ${l.lots}× ${l.option_type === "FUT" ? "underlying" : fmt(l.strike, l.strike % 1 ? 2 : 0) + " " + l.option_type}${l.premium ? " @ " + fmt(l.premium) : ""}`;
+
+  function renderOpt(out) {
+    const el = $("#opt-result");
+    if (!out.best) { el.innerHTML = `<p class="neg">${esc(out.message || "No better strategy found under these limits.")}</p>`; return; }
+    const a = out.start.metrics || {}, b = out.best.metrics;
+    el.innerHTML = `
+      <h3 style="margin-top:10px">${out.improved ? "Optimised strategy" : "Already optimal for these settings"}</h3>
+      <div class="table-wrap"><table class="simple opt-compare">
+        <thead><tr><th></th><th>Current</th><th>Optimised</th></tr></thead><tbody>
+        ${cmpRow("Score", out.start.score, out.best.score, (v) => v.toFixed(3))}
+        ${cmpRow("Win rate", a.win_rate, b.win_rate, pctv)}
+        ${cmpRow("Expected P&amp;L", a.expected_pnl, b.expected_pnl, (v) => fmt(v))}
+        ${cmpRow("Max profit", a.unlimited_profit ? Infinity : a.max_profit, b.unlimited_profit ? Infinity : b.max_profit, (v) => (v === Infinity ? "Unlimited" : fmt(v)))}
+        ${cmpRow("Max loss", a.max_loss, b.max_loss, (v) => (b.unlimited_loss && v === b.max_loss ? "Unlimited" : fmt(v)))}
+        ${cmpRow("Net premium", a.net_premium, b.net_premium, (v) => fmt(v))}
+        ${cmpRow("Charges", a.charges, b.charges, (v) => fmt(v), false)}
+      </tbody></table></div>
+      <p><b>Legs:</b> ${out.best.legs.map((l) => esc(legLine(l))).join(", ")}</p>
+      ${out.steps.length ? `<p class="muted">How it got there (${out.evaluated} live-priced candidates tried):</p>
+        <ol class="opt-steps">${out.steps.map((s, i) => `<li data-step="${i}">${esc(s.move)} <span class="muted">→ score ${s.score == null ? "–" : s.score.toFixed(3)}, win ${pctv(s.metrics && s.metrics.win_rate)}</span></li>`).join("")}</ol>` : ""}
+      <div class="row">
+        ${out.improved ? `<button id="opt-apply" class="primary">Apply</button><button id="opt-animate">Step through on the graph</button>` : ""}
+        <button id="opt-undo" ${state.undo.length ? "" : "disabled"}>Undo</button>
+      </div>
+      <p class="muted">Win rate and expected P&amp;L are at the nearest expiry, after charges, using the ${esc(out.distribution.kind === "realised" ? "realised-volatility" : "ATM-IV fair-value")} price model${out.distribution.drift ? ` with your ${(out.distribution.drift * 100).toFixed(1)}% view` : ""}. Prices: live ${esc(out.source.toUpperCase())} chain at ${esc(new Date(out.fetched_at).toLocaleTimeString())}. Not a guarantee of future results.</p>`;
+    const ap = $("#opt-apply"), an = $("#opt-animate"), un = $("#opt-undo");
+    if (ap) ap.addEventListener("click", () => applyLegs("Optimised " + state.name.replace(/^Optimised /, ""), out.best.legs));
+    if (an) an.addEventListener("click", () => animate(out));
+    if (un) un.addEventListener("click", undo);
+  }
+
+  function applyLegs(name, legs) {
+    state.undo.push({ name: state.name, legs: state.legs.map((l) => ({ ...l })) });
+    setLegs(name, legs.map((l) => ({ ...l, premium: null })));
+    const un = $("#opt-undo"); if (un) un.disabled = false;
+  }
+
+  function undo() {
+    clearInterval(animTimer);
+    const prev = state.undo.pop();
+    if (!prev) return;
+    setLegs(prev.name, prev.legs);
+    const un = $("#opt-undo"); if (un) un.disabled = !state.undo.length;
+  }
+
+  function animate(out) {
+    // Move the strategy toward the optimum one step at a time so the payoff graph shows the path.
+    clearInterval(animTimer);
+    state.undo.push({ name: state.name, legs: state.legs.map((l) => ({ ...l })) });
+    let i = 0;
+    const show = () => {
+      document.querySelectorAll("ol.opt-steps li").forEach((li) => li.classList.toggle("active", Number(li.dataset.step) === i));
+      const s = out.steps[i];
+      setLegs(`Optimising… step ${i + 1}/${out.steps.length}`, s.legs.map((l) => ({ ...l, premium: null })));
+      i += 1;
+      if (i >= out.steps.length) { clearInterval(animTimer); setTimeout(() => { state.name = "Optimised"; }, 0); }
+    };
+    show();
+    animTimer = setInterval(show, 1200);
+    const un = $("#opt-undo"); if (un) un.disabled = false;
+  }
+
+  async function optimise() {
+    const btn = $("#opt-run");
+    if (!App.chain || !state.legs.length) { App.showBanner("Add at least one leg (or pick a strategy) before optimising."); return; }
+    btn.disabled = true; btn.textContent = "Optimising…";
+    $("#opt-result").innerHTML = '<p class="muted">Searching nearby strategies on live prices…</p>';
+    document.getElementById("opt-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    try {
+      optOut = await api("/api/strategy/optimize", { method: "POST", body: JSON.stringify(optBody()) });
+      renderOpt(optOut);
+    } catch (e) {
+      $("#opt-result").innerHTML = `<p class="neg">Optimise failed: ${esc(e.message)}</p>`;
+    } finally {
+      btn.disabled = false; btn.textContent = "✨ Optimise";
+    }
+  }
+  $("#opt-run").addEventListener("click", optimise);
+  $("#opt-goal").addEventListener("input", goalLabel);
+  goalLabel();
+
   /* ---------- export / import ---------- */
   function exportTemplate() {
     const t = currentTemplate();
