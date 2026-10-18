@@ -25,7 +25,9 @@
       <div class="kv">
         <div>Opened</div><div>${new Date(pos.opened_at).toLocaleString()} @ spot ${fmt(pos.entry_spot)}</div>
         ${open ? `<div>Spot now</div><div>${fmt(pos.spot)}</div>` : `<div>Closed</div><div>${new Date(pos.closed_at).toLocaleString()}</div>`}
-        <div>${open ? "Unrealised P&amp;L" : "Realised P&amp;L"}</div><div class="${cls(pnl)}"><b>${pnl == null ? "unavailable" : fmt(pnl)}</b></div>
+        <div>${open ? "Unrealised P&amp;L" : "Realised P&amp;L"} (gross)</div><div class="${cls(pnl)}"><b>${pnl == null ? "unavailable" : fmt(pnl)}</b></div>
+        <div>Charges${open ? " (incl. est. exit)" : ""}</div><div>${pos.charges_total == null ? "–" : fmt(pos.charges_total)}</div>
+        <div>Net P&amp;L</div><div class="${cls(pos.net_pnl)}"><b>${pos.net_pnl == null ? "–" : fmt(pos.net_pnl)}</b></div>
       </div>
       ${(pos.errors || []).map((e) => `<p class="neg">${esc(e)}</p>`).join("")}
       <div class="table-wrap"><table class="simple">

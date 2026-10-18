@@ -38,6 +38,8 @@ class Leg:
     iv: Optional[float] = None
     expiry_at: Optional[datetime] = None
     market_price: Optional[float] = None  # current live price, used to value the leg today
+    bid: Optional[float] = None  # live best bid/ask when the leg was priced (for cost estimates)
+    ask: Optional[float] = None
 
     @property
     def sign(self) -> int:
@@ -112,7 +114,7 @@ def leg_from_chain(chain: OptionChain, option_type: LegType, action: Action, str
     if not px:
         raise ValueError(f"No live price for {strike:g} {option_type} in the {chain.symbol} chain")
     return Leg(option_type, action, strike, lots, float(px), chain.expiry, q.iv, chain.expiry_at,
-               q.mid or q.price)
+               q.mid or q.price, q.bid, q.ask)
 
 
 def _years(start: datetime, end: Optional[datetime]) -> float:

@@ -254,7 +254,7 @@
     const targetLabel = new Date(r.target).toLocaleDateString();
     const rows = steps.map((pc) => {
       const px = r.spot * (1 + pc / 100);
-      const cell = (ys) => { const v = interp(r.prices, ys, px) + 0; return `<td class="${v >= 0 ? "pos" : "neg"}">${fmt(v, 0)}</td>`; };
+      const cell = (ys) => { const v = Math.round(interp(r.prices, ys, px)) + 0; return `<td class="${v >= 0 ? "pos" : "neg"}">${fmt(v, 0)}</td>`; };
       return `<tr class="${pc === 0 ? "spot-row" : ""}"><td>${pc > 0 ? "+" : ""}${pc}%</td><td>${fmt(px, 0)}</td>${cell(r.pnl_today)}${cell(r.pnl_target)}${cell(r.pnl_expiry)}</tr>`;
     });
     $("#pnl-table").innerHTML = `<thead><tr><th>Move</th><th>Price</th><th>Today</th><th>${esc(targetLabel)}</th><th>Expiry</th></tr></thead><tbody>${rows.join("")}</tbody>`;
@@ -280,6 +280,13 @@
         <div>Theta / day</div><div>${fmt(g.theta, 2)}</div>
         <div>Vega / vol pt</div><div>${fmt(g.vega, 2)}</div>
       </div><p class="muted">Lot size ${r.strategy.lot_size}. Prices from ${esc(r.source.toUpperCase())} at ${esc(new Date(r.chain_fetched_at).toLocaleTimeString())}.</p></div>
+      ${r.costs ? `<div class="card"><h3>Costs &amp; net</h3><div class="kv">
+        <div>Charges to enter</div><div>${fmt(r.costs.entry.total)}</div>
+        <div>Round trip (in + out)</div><div>${fmt(r.costs.round_trip)}</div>
+        <div title="Cost of crossing the bid/ask spread on entry and exit versus the mid">Spread slippage</div><div>${r.costs.spread_slippage == null ? "–" : fmt(r.costs.spread_slippage)}</div>
+        <div>Net max profit</div><div class="pos">${r.unlimited_profit ? "Unlimited" : fmt(r.costs.net_max_profit)}</div>
+        <div>Net max loss</div><div class="neg">${r.unlimited_loss ? "Unlimited" : fmt(r.costs.net_max_loss)}</div>
+      </div><p class="muted" title="Brokerage ₹${r.costs.rates.brokerage_per_order}/order, STT ${(r.costs.rates.stt_sell * 100).toFixed(3)}% sell, exchange ${(r.costs.rates.exchange_txn * 100).toFixed(5)}%, stamp ${(r.costs.rates.stamp_buy * 100).toFixed(3)}% buy, SEBI, GST ${(r.costs.rates.gst * 100).toFixed(0)}%">Brokerage, STT, exchange, SEBI, stamp duty and GST at current Indian F&amp;O rates (hover for rates).</p></div>` : ""}
       <div class="card"><h3>Legs as priced</h3><ul class="actions">${legs}</ul></div>`;
   }
 

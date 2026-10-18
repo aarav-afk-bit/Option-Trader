@@ -41,6 +41,18 @@ class AnalyzeIn(BaseModel):
     fill: str = "ltp"
 
 
+def add_costs(result: dict) -> None:
+    """Attach charges/slippage and the net (after round-trip charges) payoff figures."""
+    from ..charges import strategy_costs
+
+    st = result["strategy"]
+    costs = strategy_costs(st["legs"], st["lot_size"])
+    rt = costs["round_trip"]
+    costs["net_max_profit"] = None if result["max_profit"] is None else round(result["max_profit"] - rt, 2)
+    costs["net_max_loss"] = None if result["max_loss"] is None else round(result["max_loss"] - rt, 2)
+    result["costs"] = costs
+
+
 def build_strategy(body: AnalyzeIn, manager: ProviderManager):
     """Price every leg off the real chain; legs without a live price are rejected."""
     chain = manager.get_chain(body.symbol, parse_expiry(body.expiry), body.source)
@@ -71,7 +83,7 @@ def build_strategy(body: AnalyzeIn, manager: ProviderManager):
                 raise HTTPException(400, f"No live price for {raw.strike:g} {otype}")
             leg = Leg(otype, action, raw.strike, raw.lots, float(premium), leg_chain.expiry,  # type: ignore[arg-type]
                       raw.iv if raw.iv is not None else q.iv, leg_chain.expiry_at,
-                      None if raw.iv is not None else (q.mid or q.price))
+                      None if raw.iv is not None else (q.mid or q.price), q.bid, q.ask)
         legs.append(leg)
     lot = body.lot_size or chain.lot_size or 1
     return chain, Strategy(body.name, legs, lot)
@@ -92,6 +104,7 @@ def analyze_endpoint(body: AnalyzeIn, manager: ProviderManager = Depends(get_man
     result["source"] = chain.source
     result["symbol"] = chain.symbol
     result["chain_fetched_at"] = chain.fetched_at.isoformat()
+    add_costs(result)
     return result
 
 
@@ -147,6 +160,7 @@ def build_from_template(template: StrategyTemplate, body: BuildIn, manager: Prov
                      iv_shift=body.iv_shift, range_pct=body.range_pct, q=chain.carry)
     result.update(source=chain.source, symbol=chain.symbol, template=template.to_dict(),
                   chain_fetched_at=chain.fetched_at.isoformat())
+    add_costs(result)
     return result
 
 
