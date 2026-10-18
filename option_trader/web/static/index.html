@@ -184,6 +184,8 @@
           <div class="row">
             <label>Price model
               <select id="opt-dist" title="How the probability of each outcome is estimated">
+                <option value="implied">Market-implied (whole chain)</option>
+                <option value="auto">Auto (signals + realised vol)</option>
                 <option value="atm">Fair value (ATM IV)</option>
                 <option value="realised">Realised volatility</option>
               </select>

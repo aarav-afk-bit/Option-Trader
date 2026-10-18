@@ -290,7 +290,7 @@ def screen_strategies(body: ScreenIn, request: Request,
 
 
 class DistributionIn(BaseModel):
-    mode: str = "atm"  # atm | realised
+    mode: str = "atm"  # atm | realised | implied | auto
     drift: float = Field(0.0, description="Expected move by expiry, e.g. 0.01 = +1%")
     vol_mult: float = 1.0
 
@@ -304,6 +304,11 @@ def make_distribution(chain, manager: ProviderManager, d: DistributionIn):
     from ..optimizer.context import build_distribution
 
     candles = None
+    if d.mode == "auto":
+        try:
+            candles = manager.get_history(chain.symbol, "1y", "1d")
+        except DataUnavailableError:
+            candles = None  # auto view falls back to option-chain signals and ATM IV
     if d.mode == "realised":
         try:
             candles = manager.get_history(chain.symbol, "6mo", "1d")
