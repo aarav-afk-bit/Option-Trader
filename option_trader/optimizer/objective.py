@@ -31,6 +31,9 @@ class Preferences:
     min_win_rate: float = 0.0
     max_legs: int = 4
     max_lots_per_leg: int = 5
+    max_spread_pct: float = 10.0  # skip contracts whose bid/ask spread is wider than this % of mid
+    min_oi: float = 0.0  # skip contracts with less open interest than this
+    robust: bool = True  # also score under the underlying finishing 0.5 sd higher/lower
 
     def clamp(self) -> "Preferences":
         self.win_weight = min(max(self.win_weight, 0.0), 1.0)

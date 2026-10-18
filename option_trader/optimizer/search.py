@@ -17,6 +17,7 @@ today's real prices. It stops when no change improves the score.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import date
 from typing import Callable, Optional
@@ -72,7 +73,9 @@ class Optimizer:
         self.r = r
         self.fill = fill
         self.evaluated = 0
+        self.rejected_illiquid = 0
         self._cache: dict[tuple, Optional[Node]] = {}
+        self._scenarios = self._scenario_dists() if prefs.robust else []
 
     # -- pricing & scoring ------------------------------------------------------------------
     def _chain(self, exp: Optional[str]) -> OptionChain:
@@ -80,11 +83,40 @@ class Optimizer:
             return self.chain
         return self.chain_for_expiry(date.fromisoformat(exp))
 
+    def _scenario_dists(self) -> list[Distribution]:
+        """The same distribution shifted half a standard deviation down and up."""
+        from .implied import shift
+
+        p = self.dist.params
+        vol = p.get("vol") or p.get("atm_iv")
+        years = p.get("years")
+        if not vol or not years:
+            return []
+        k = 0.5 * vol * math.sqrt(years)
+        return [shift(self.dist, -k), shift(self.dist, k)]
+
+    def liquid(self, chain: OptionChain, t: str, k: float) -> bool:
+        if t == "FUT":
+            return True
+        q = chain.quote(k, t)
+        if q is None:
+            return False
+        sp = q.spread_pct
+        if sp is not None and sp > self.prefs.max_spread_pct:
+            return False
+        if self.prefs.min_oi and (q.oi or 0) < self.prefs.min_oi:
+            return False
+        return True
+
     def build(self, specs: tuple) -> Optional[Strategy]:
         legs: list[Leg] = []
         for t, a, k, lots, e in specs:
+            ch = self._chain(e)
+            if not self.liquid(ch, t, k):
+                self.rejected_illiquid += 1
+                return None  # too wide a spread / too little OI to trade at these prices
             try:
-                legs.append(leg_from_chain(self._chain(e), t, a, k, lots, self.fill))
+                legs.append(leg_from_chain(ch, t, a, k, lots, self.fill))
             except ValueError:
                 return None  # strike not listed or no live price: not a tradable candidate
         return Strategy("Optimised", legs, self.chain.lot_size or 1) if legs else None
@@ -99,6 +131,14 @@ class Optimizer:
             self.evaluated += 1
             m = evaluate(st, self.dist, self.chain.spot, self.r, self.chain.carry)
             sc = score(m, self.prefs)
+            if sc is not None and self._scenarios:
+                # Robustness: blend in the worst score if the market drifts half a sd either way,
+                # so knife-edge strategies that only work at one exact price lose out.
+                alt = [score(evaluate(st, d, self.chain.spot, self.r, self.chain.carry), self.prefs)
+                       for d in self._scenarios]
+                worst = min((a for a in alt if a is not None), default=0.0)
+                m["robust_score"] = round(worst, 5)
+                sc = round(0.6 * sc + 0.4 * worst, 5)
             if sc is not None:
                 result = Node(specs, st, m, sc, history)
         self._cache[specs] = result
@@ -218,3 +258,65 @@ class Optimizer:
             steps.append({"move": desc, **self._summary(nxt, self._cache.get(nxt))})
             cur = nxt
         return steps
+
+
+def template_seeds(opt: "Optimizer", templates, widths=(1, 2), top: int = 4) -> list[tuple[tuple, str]]:
+    """Best-scoring built-in/saved strategies placed on the chain, as starting points."""
+    from ..strategy.templates import ResolveError, resolve
+
+    scored = []
+    for t in templates:
+        for w in widths:
+            if w > 1 and all(l.offset == 0 for l in t.legs):
+                continue
+            try:
+                st = resolve(t, opt.chain, width=w, fill=opt.fill,
+                             chain_for_offset=lambda n: opt.chain_for_expiry(
+                                 [e for e in opt.chain.expiries if e > opt.chain.expiry][n - 1]))
+            except (ResolveError, IndexError, ValueError):
+                continue
+            specs = normalize([spec_of(l) for l in st.to_dict()["legs"]])
+            n = opt.node(specs, [f"Start from {t.name}" + (f" (width {w})" if w > 1 else "")])
+            if n:
+                scored.append((n.score, specs, n.history[0]))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    out, seen = [], set()
+    for _, specs, desc in scored:
+        if specs not in seen:
+            seen.add(specs)
+            out.append((specs, desc))
+        if len(out) >= top:
+            break
+    return out
+
+
+def run_global(opt: "Optimizer", user_specs: list, templates, max_iters: int = 20, beam: int = 6,
+               starts: int = 4) -> dict:
+    """Multi-start search: from your legs and from the best-fitting strategy templates."""
+    user_key = normalize(user_specs) if user_specs else None
+    start_node = opt.node(user_key, []) if user_key else None
+    seeds = template_seeds(opt, templates, top=starts)
+    if user_key:
+        seeds = [(user_key, None)] + seeds
+    best_run, best_seed = None, None
+    for specs, desc in seeds:
+        run = opt.run(list(specs), max_iters, beam)
+        if run.get("best") and (best_run is None or run["best"]["score"] > best_run["best"]["score"]):
+            best_run, best_seed = run, desc
+    if best_run is None:
+        return {"start": opt._summary(user_key or (), start_node), "best": None, "steps": [],
+                "evaluated": opt.evaluated, "message": "No valid strategy found under your limits"}
+    steps = best_run["steps"]
+    if best_seed:  # the winning path began from a template, not the user's legs
+        seed_specs = next(s for s, d in seeds if d == best_seed)
+        steps = [{"move": best_seed, **opt._summary(seed_specs, opt._cache.get(seed_specs))}] + steps
+    start_info = opt._summary(user_key, start_node) if user_key else {"legs": [], "metrics": None, "score": None,
+                                                                       "lot_size": opt.chain.lot_size or 1}
+    return {
+        "start": start_info,
+        "best": best_run["best"],
+        "steps": steps,
+        "evaluated": opt.evaluated,
+        "seeds": [d or "Your legs" for _, d in seeds],
+        "improved": start_node is None or best_run["best"]["score"] > start_node.score + 1e-4,
+    }

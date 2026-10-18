@@ -67,8 +67,8 @@ def test_high_win_weight_prefers_higher_win_rate():
     ch, t = smile_chain()
     e = ch.expiry.isoformat()
     start = [("CE", "BUY", 1000.0, 1, e)]
-    hi = make_opt(ch, t, Preferences(win_weight=0.95, max_loss=4000)).run(start, 10, 3)["best"]["metrics"]
-    lo = make_opt(ch, t, Preferences(win_weight=0.05, max_loss=4000)).run(start, 10, 3)["best"]["metrics"]
+    hi = make_opt(ch, t, Preferences(win_weight=0.95, max_loss=4000, robust=False)).run(start, 10, 3)["best"]["metrics"]
+    lo = make_opt(ch, t, Preferences(win_weight=0.05, max_loss=4000, robust=False)).run(start, 10, 3)["best"]["metrics"]
     assert hi["win_rate"] >= lo["win_rate"]
     assert lo["edge"] >= hi["edge"]
 
@@ -90,4 +90,4 @@ def test_optimize_endpoint():
     d = r.json()
     assert d["start"]["score"] is not None and d["best"]["score"] >= d["start"]["score"]
     assert d["evaluated"] > 0 and d["source"] == "nse"
-    assert client.post("/api/strategy/optimize", json={"symbol": "NIFTY", "legs": []}).status_code == 400
+    assert client.post("/api/strategy/optimize", json={"symbol": "NIFTY", "legs": [], "search": "local"}).status_code == 400
