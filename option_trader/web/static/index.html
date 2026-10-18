@@ -45,6 +45,7 @@
 
 <nav class="tabs">
   <button class="tab active" data-tab="chain">Option Chain</button>
+  <button class="tab" data-tab="watchlist">Watchlist</button>
   <button class="tab" data-tab="charts">Charts</button>
   <button class="tab" data-tab="signals">Signals &amp; Ideas</button>
   <button class="tab" data-tab="builder">Strategy Builder</button>
@@ -88,6 +89,21 @@
       </table>
     </div>
     <p class="hint">Every number above comes from the live source shown. Click a call/put LTP to add it to the Strategy Builder.</p>
+  </section>
+
+  <section id="tab-watchlist" class="panel">
+    <form id="wl-form" class="row" autocomplete="off">
+      <label>Add symbol <input id="wl-add" list="symbols" placeholder="e.g. RELIANCE"></label>
+      <button type="submit">Add</button>
+      <button type="button" id="wl-refresh" class="primary">Refresh</button>
+      <span id="wl-status" class="muted"></span>
+    </form>
+    <div class="table-wrap"><table class="simple watch">
+      <thead><tr><th>Symbol</th><th>Spot</th><th>Expiry</th><th>PCR (OI)</th><th>ATM IV</th><th>ATM straddle</th>
+        <th>Max pain</th><th>Support</th><th>Resistance</th><th>OI bias</th><th>Source</th><th></th></tr></thead>
+      <tbody id="wl-body"></tbody>
+    </table></div>
+    <p class="muted">Each row is the symbol's live nearest-expiry chain. Click a symbol to open its chain. Sources are rate-limited, so large lists take a few seconds.</p>
   </section>
 
   <section id="tab-charts" class="panel">
@@ -177,5 +193,6 @@
 <script src="/static/app.js"></script>
 <script src="/static/builder.js"></script>
 <script src="/static/charts.js"></script>
+<script src="/static/watchlist.js"></script>
 </body>
 </html>
