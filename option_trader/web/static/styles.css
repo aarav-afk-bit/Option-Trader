@@ -24,6 +24,12 @@
   --glow: 0 0 10px rgba(0, 229, 255, .35);
   --glow-strong: 0 0 6px rgba(0, 229, 255, .7), 0 0 18px rgba(0, 229, 255, .35);
   --itm: rgba(255, 196, 0, 0.05); --atm: rgba(255, 43, 214, 0.12);
+  /* Data-series colours, validated for colour-blind separation and contrast on the dark
+     surface (dataviz validator: lightness band, chroma, CVD, contrast all PASS).
+     Magenta is an accent only (spot line, ATM, trim): it collapses with cyan for deutans. */
+  --series-1: #00a6ba; --series-2: #bf890d; --series-3: #904fff;
+  --profit: #39ff88; --loss: #ff3d6e;
+  --chart-grid: rgba(0, 229, 255, .07);
   --shadow: 0 0 0 1px rgba(0, 229, 255, .04), 0 8px 24px rgba(0, 0, 0, .45);
   --radius: 3px;
   font-family: var(--font-ui);
@@ -37,6 +43,9 @@
   --grid: rgba(0, 119, 168, 0.06);
   --glow: none; --glow-strong: none;
   --itm: rgba(154, 98, 0, 0.07); --atm: rgba(176, 18, 126, 0.10);
+  --series-1: #0581a3; --series-2: #af7112; --series-3: #6e07f2;
+  --profit: #0a8a4a; --loss: #c8103a;
+  --chart-grid: rgba(11, 26, 43, .08);
   --shadow: 0 1px 3px rgba(11, 26, 43, .08);
 }
 
@@ -382,3 +391,10 @@ body.side-collapsed #side-collapse .ico { transform: rotate(180deg); }
   .side-foot, .neon-panel::after { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .neon-panel::before { animation: none; display: none; } }
+
+/* ---------- neon data visuals ---------- */
+td.flash-up, td.flash-down { text-shadow: 0 0 8px currentColor; }
+#chain-table.iv-heat td.iv-cell { background: rgba(0, 166, 186, calc(var(--heat, 0) * .32)); }
+:root[data-theme="light"] #chain-table.iv-heat td.iv-cell { background: rgba(5, 129, 163, calc(var(--heat, 0) * .25)); }
+.chart-legend-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.chart.tall { height: 460px; }

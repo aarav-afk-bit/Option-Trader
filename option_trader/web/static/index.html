@@ -104,6 +104,7 @@
       <label class="inline"><input type="checkbox" data-col="greeks" checked> Delta</label>
       <label class="inline"><input type="checkbox" data-col="greeks2"> Gamma/Theta/Vega</label>
       <label class="inline"><input type="checkbox" data-col="quote" checked> Bid/Ask</label>
+      <label class="inline" title="Shade IV cells: deeper colour = higher implied volatility"><input type="checkbox" id="iv-heat"> IV heat</label>
       <button id="jump-atm" type="button">Jump to ATM</button>
       <button id="export-csv" type="button">Export CSV</button>
     </div>
@@ -148,7 +149,7 @@
       <div class="card"><h3>Change in open interest</h3><div id="ch-oichg" class="chart"></div></div>
       <div class="card"><h3>IV smile</h3><div id="ch-smile" class="chart"></div></div>
       <div class="card"><h3>IV term structure <button id="load-term" class="small-btn">Load</button></h3><div id="ch-term" class="chart"><p class="muted">Fetches the next expiries' live chains. Press Load.</p></div></div>
-      <div class="card wide"><h3>Intraday: spot, PCR and ATM IV</h3><div id="ch-intraday" class="chart"></div>
+      <div class="card wide"><h3>Intraday: spot, PCR and ATM IV</h3><div id="ch-intraday" class="chart tall"></div>
         <p class="muted">Recorded from each live fetch while the app is running (resets daily and on restart).</p></div>
     </div>
   </section>

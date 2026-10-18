@@ -204,30 +204,34 @@
 
   function drawChart(r) {
     const x = r.prices, y = r.pnl_expiry;
+    const c = App.colors();
     const pos = y.map((v) => (v >= 0 ? v : null)), neg = y.map((v) => (v < 0 ? v : null));
-    const text = cssVar("--text"), grid = cssVar("--border");
     const targetLabel = `On ${new Date(r.target).toLocaleDateString()}`;
     const traces = [
-      { x, y: pos, name: "Profit at expiry", mode: "lines", line: { color: "#22c55e", width: 0 }, fill: "tozeroy", fillcolor: "rgba(34,197,94,0.18)", hoverinfo: "skip", showlegend: false },
-      { x, y: neg, name: "Loss at expiry", mode: "lines", line: { color: "#ef4444", width: 0 }, fill: "tozeroy", fillcolor: "rgba(239,68,68,0.18)", hoverinfo: "skip", showlegend: false },
-      { x, y, name: "At expiry", mode: "lines", line: { color: "#3b82f6", width: 2.5 } },
-      { x, y: r.pnl_target, name: targetLabel, mode: "lines", line: { color: "#f59e0b", width: 2, dash: "dash" } },
-      { x, y: r.pnl_today, name: "Today", mode: "lines", line: { color: "#a855f7", width: 1.5, dash: "dot" } },
-      { x: r.breakevens, y: r.breakevens.map(() => 0), name: "Breakeven", mode: "markers", marker: { color: text, size: 8, symbol: "diamond" } },
+      { x, y: pos, name: "Profit zone", mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: App.alpha(c.profit, 0.12), hoverinfo: "skip", showlegend: false },
+      { x, y: neg, name: "Loss zone", mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: App.alpha(c.loss, 0.12), hoverinfo: "skip", showlegend: false },
+      // neon glow: a wide translucent copy under the expiry line (decorative, not a series)
+      { x, y, mode: "lines", line: { color: App.alpha(c.s1, 0.22), width: 9 }, hoverinfo: "skip", showlegend: false },
+      { x, y, name: "At expiry", mode: "lines", line: { color: c.s1, width: 2 } },
+      { x, y: r.pnl_target, name: targetLabel, mode: "lines", line: { color: c.s2, width: 2, dash: "dash" } },
+      { x, y: r.pnl_today, name: "Today", mode: "lines", line: { color: c.s3, width: 2, dash: "dot" } },
+      { x: r.breakevens, y: r.breakevens.map(() => 0), name: "Breakeven", mode: "markers+text", text: r.breakevens.map((b) => fmt(b, 0)),
+        textposition: "top center", textfont: { color: c.text, size: 11 }, marker: { color: c.text, size: 9, symbol: "diamond", line: { color: App.css("--panel"), width: 2 } } },
     ];
-    const layout = {
+    const ymax = Math.max(...y.filter((v) => v != null)), ymin = Math.min(...y.filter((v) => v != null));
+    const layout = App.plotLayout({
       margin: { l: 70, r: 20, t: 40, b: 50 },
-      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-      font: { color: text },
-      title: { text: `${esc(r.strategy.name)} · ${esc(r.symbol)} · spot ${fmt(r.spot)} · ${esc(r.source.toUpperCase())}`, font: { size: 14 } },
-      xaxis: { title: "Underlying price", gridcolor: grid, zerolinecolor: grid },
-      yaxis: { title: "Profit / loss", gridcolor: grid, zerolinecolor: text, zerolinewidth: 1 },
-      hovermode: "x unified",
-      hoverlabel: { bgcolor: cssVar("--panel2"), bordercolor: grid, font: { color: text } },
-      legend: { orientation: "h", y: -0.18 },
-      shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: "#94a3b8", dash: "dot", width: 1 } }],
-      annotations: [{ x: r.spot, yref: "paper", y: 1, text: "Spot", showarrow: false, font: { size: 11 }, yanchor: "bottom" }],
-    };
+      title: { text: `${esc(r.strategy.name)} · ${esc(r.symbol)} · spot ${fmt(r.spot)} · ${esc(r.source.toUpperCase())}`, font: { size: 14, color: c.text } },
+      xaxis: { title: "Underlying price" },
+      yaxis: { title: "Profit / loss (₹)", zerolinecolor: c.muted, zerolinewidth: 1 },
+      legend: { orientation: "h", y: -0.18, font: { color: c.text } },
+      shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: c.accent, dash: "dot", width: 1 } }],
+      annotations: [
+        { x: r.spot, yref: "paper", y: 1, text: "SPOT", showarrow: false, font: { size: 10, color: c.accent, family: App.css("--font-display") }, yanchor: "bottom" },
+        ...(ymax > 0 ? [{ xref: "paper", x: 0.01, y: ymax, text: "Profit", showarrow: false, xanchor: "left", font: { size: 11, color: c.muted } }] : []),
+        ...(ymin < 0 ? [{ xref: "paper", x: 0.99, y: ymin, text: "Loss", showarrow: false, xanchor: "right", yanchor: "bottom", font: { size: 11, color: c.muted } }] : []),
+      ],
+    });
     const el = $("#payoff");
     if (!el._fullLayout) el.innerHTML = ""; // drop the "add legs" placeholder before the first plot
     Plotly.react(el, traces, layout, { responsive: true, displaylogo: false });
@@ -243,9 +247,12 @@
 
   function drawGreeks(r) {
     const k = $("#greek-pick").value, c = r.greeks_curve;
-    Plotly.react("greeks-chart", [{ x: c.prices, y: c[k], mode: "lines", line: { color: "#3b82f6", width: 2 }, name: k }],
-      App.plotLayout({ showlegend: false, xaxis: { title: "Underlying price" },
-        shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: "#94a3b8", dash: "dot", width: 1 } }] }),
+    const col = App.colors();
+    Plotly.react("greeks-chart", [
+      { x: c.prices, y: c[k], mode: "lines", line: { color: App.alpha(col.s1, 0.22), width: 9 }, hoverinfo: "skip", showlegend: false },
+      { x: c.prices, y: c[k], mode: "lines", line: { color: col.s1, width: 2 }, name: k }],
+      App.plotLayout({ showlegend: false, xaxis: { title: "Underlying price" }, yaxis: { title: $("#greek-pick").selectedOptions[0].text },
+        shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: col.accent, dash: "dot", width: 1 } }] }),
       { responsive: true, displaylogo: false });
   }
 
