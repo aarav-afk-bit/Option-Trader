@@ -21,6 +21,7 @@ from ..config import Settings, get_settings
 from ..errors import DataUnavailableError
 from ..models import Candle, OptionChain, utcnow
 from ..pricing import enrich_chain
+from ..quality import report, sanitize, validate
 from .base import DataProvider, normalize_symbol
 
 log = logging.getLogger(__name__)
@@ -240,7 +241,13 @@ class ProviderManager:
             )
             self._flag_staleness(chain)  # type: ignore[arg-type]
             self._attach_futures(chain)  # type: ignore[arg-type]
+            sanitize(chain)  # type: ignore[arg-type]
             enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
+            before = sum(q.suspect for r in chain.rows for q in (r.call, r.put) if q)  # type: ignore[union-attr]
+            validate(chain, self.risk_free_rate)  # type: ignore[arg-type]
+            if sum(q.suspect for r in chain.rows for q in (r.call, r.put) if q) != before:  # type: ignore[union-attr]
+                enrich_chain(chain, self.risk_free_rate)  # re-derive the forward without suspects
+            chain.quality = report(chain)  # type: ignore[union-attr]
             self._store(key, chain)
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain

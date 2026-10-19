@@ -125,7 +125,7 @@ def iv_skew(chain: OptionChain, steps: int = 3) -> Optional[float]:
         return None
     put = chain.quote(ks[i - steps], "PE")
     call = chain.quote(ks[i + steps], "CE")
-    if not (put and put.iv and call and call.iv):
+    if not (put and put.iv and call and call.iv) or put.suspect or call.suspect:
         return None
     return put.iv - call.iv
 

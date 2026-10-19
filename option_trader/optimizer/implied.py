@@ -29,7 +29,7 @@ def smile_points(chain: OptionChain, forward: float) -> tuple[np.ndarray, np.nda
     xs, ivs, w = [], [], []
     for r in chain.rows:
         q = r.put if r.strike < forward else r.call
-        if q is None or not q.iv or not q.price:
+        if q is None or not q.iv or not q.price or q.suspect:
             continue
         x = math.log(r.strike / forward)
         xs.append(x)

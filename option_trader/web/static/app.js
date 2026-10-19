@@ -195,6 +195,15 @@ function dayMove(ch) {
   return ` <span class="${signCls(chg)}" title="Change from previous close ${fmt(idx.prev_close)}">${chg >= 0 ? "+" : ""}${fmt(chg)} (${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%)</span>`;
 }
 
+function qualityBadge(ch) {
+  const q = ch.quality;
+  if (!q) return "";
+  const cls = q.score >= 95 ? "bullish" : q.score >= 80 ? "neutral" : "bearish";
+  const lines = q.issues.slice(0, 12).map((i) => `${i.strike} ${i.type}: ${i.issues.join("; ")}`).join("\n");
+  const title = `${q.priced} priced quotes · ${q.suspect} suspect · ${q.stale_last_trade} last trades outside the live bid/ask · ${q.no_bid_ask} without a bid/ask${lines ? "\n\n" + lines : ""}\n\nSuspect quotes are shown but not used for the forward, IV analytics or the optimiser.`;
+  return `<span class="pill ${cls}" title="${esc(title)}">Data quality ${q.score}/100${q.suspect ? ` · ${q.suspect} ⚠` : ""}</span>`;
+}
+
 function ageBadge(ch) {
   const age = ch.data_age_seconds;
   if (age == null) return "";
@@ -216,6 +225,7 @@ function renderChain(ch) {
     <span>Source <b>${esc(ch.source.toUpperCase())}</b></span>
     ${ch.live_at ? `<span class="pill bullish">Live tick ${esc(new Date(ch.live_at).toLocaleTimeString())}</span>` : ""}
     ${ageBadge(ch)}
+    ${qualityBadge(ch)}
     <span>Snapshot <b>${esc(ts)}</b>${ch.exchange_timestamp ? ` · exchange time <b>${esc(ch.exchange_timestamp)}</b>` : ""}</span>
     ${App.market && !App.market.open && !(ch.live_at && Date.now() - new Date(ch.live_at).getTime() < 120000) ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
     ${ch.notes.map((n) => `<span class="muted">${esc(n)}</span>`).join("")}`;
@@ -244,7 +254,7 @@ function renderChain(ch) {
     return old === undefined || old === q.ltp ? "" : q.ltp > old ? "flash-up" : "flash-down";
   };
   const ltpCell = (q, type, strike, itm) =>
-    q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)} ${q.ltp_stale ? "stale-ltp" : ""}" data-type="${type}" data-strike="${strike}" title="${q.ltp_stale ? `Last trade ${fmt(q.ltp)} is outside the current bid/ask; the app prices this contract at the mid ${fmt(q.mid)}. ` : ""}Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
+    q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)} ${q.ltp_stale ? "stale-ltp" : ""} ${q.suspect ? "suspect" : ""}" data-type="${type}" data-strike="${strike}" title="${q.suspect ? `⚠ Data check: ${esc(q.issues.join("; "))}. Not used for analysis. ` : ""}${q.ltp_stale ? `Last trade ${fmt(q.ltp)} is outside the current bid/ask; the app prices this contract at the mid ${fmt(q.mid)}. ` : ""}Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
 
   // IV heat: one hue, intensity by IV rank within the visible strikes (sequential encoding).
   const ivs = visible.flatMap((r) => [r.call?.iv, r.put?.iv]).filter((v) => v);

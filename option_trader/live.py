@@ -102,12 +102,18 @@ class LiveHub:
                     q.change = round(t["ltp"] - t["close"], 2)
                 ts = t.get("exchange_ts") or 0
                 q.tick_ts = datetime.fromtimestamp(ts / 1000, timezone.utc).isoformat() if ts else None
-                # Recompute IV/Greeks from the new price.
+                # Recompute IV/Greeks from the new price; old quality flags described the old price.
                 q.iv = q.delta = q.gamma = q.theta = q.vega = None
+                q.suspect, q.issues = False, []
                 latest = max(latest, ts)
                 applied += 1
         if applied or latest:
+            from .quality import report, sanitize, validate
+
+            sanitize(chain)
             enrich_chain(chain, self.r)
+            validate(chain, self.r)
+            chain.quality = report(chain)
             chain.live_at = datetime.fromtimestamp(latest / 1000, timezone.utc).isoformat() if latest else None
             note = "Live: prices updated tick-by-tick from Angel One's exchange feed"
             if note not in chain.notes:

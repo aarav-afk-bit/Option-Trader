@@ -473,3 +473,7 @@ html:not(.fx-off) tr.scan-row td::after { content: ""; position: absolute; top: 
 /* everything calm when effects are off */
 html.fx-off .neon-panel::before, html.fx-off .live-pulse { animation: none; }
 html.fx-off td.flash-up, html.fx-off td.flash-down { animation-duration: .01s; }
+
+/* ---------- data quality ---------- */
+td.suspect { position: relative; color: var(--amber); }
+td.suspect::before { content: "⚠"; position: absolute; left: 4px; font-size: 10px; color: var(--amber); }
