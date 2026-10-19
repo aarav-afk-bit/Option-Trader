@@ -1,0 +1,120 @@
+"""Overlay real-time exchange ticks on option chain snapshots.
+
+When Angel One credentials are configured, every chain the app serves (whether its snapshot
+came from NSE, Angel or Yahoo) is mapped onto Angel's NFO contract tokens and subscribed on
+the SmartAPI WebSocket. The latest traded price, best bid/ask, volume and open interest from
+those ticks replace the snapshot values, and IV/Greeks are recomputed from the new prices.
+Without credentials the app keeps polling snapshots and says so in the UI.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from datetime import datetime, timezone
+from typing import Optional
+
+from .models import OptionChain
+from .pricing import enrich_chain
+from .providers.angel_stream import EXCHANGE_NSE_CM, EXCHANGE_NSE_FO, AngelTickStream
+
+log = logging.getLogger(__name__)
+
+
+class LiveHub:
+    def __init__(self, angel, stream: Optional[AngelTickStream] = None, risk_free_rate: float = 0.065):
+        from .providers.angelone import stream_credentials
+
+        self.angel = angel
+        self.stream = stream or AngelTickStream(lambda: stream_credentials(angel))
+        self.r = risk_free_rate
+        self._maps: dict[tuple, dict] = {}
+        self._lock = threading.Lock()
+        self.last_error: Optional[str] = None
+
+    @property
+    def version(self) -> int:
+        return self.stream.version
+
+    def _mapping(self, chain: OptionChain) -> Optional[dict]:
+        from .providers.angelone import INDEX_TOKENS
+
+        key = (chain.symbol, chain.expiry)
+        with self._lock:
+            if key in self._maps:
+                return self._maps[key]
+        try:
+            master = self.angel.master()
+        except Exception as exc:
+            self.last_error = f"Angel instrument list unavailable: {exc}"
+            return None
+        contracts = master.contracts(chain.symbol, chain.expiry)
+        if not contracts:
+            self.last_error = f"No Angel One contracts for {chain.symbol} {chain.expiry}"
+            return None
+        tokens = {}
+        for r in chain.rows:
+            for opt in ("CE", "PE"):
+                rec = contracts.get((r.strike, opt))
+                if rec:
+                    tokens[(r.strike, opt)] = str(rec["token"])
+        spot_token = INDEX_TOKENS.get(chain.symbol) or master.equity_tokens.get(chain.symbol)
+        m = {"tokens": tokens, "spot": spot_token}
+        with self._lock:
+            self._maps[key] = m
+        self.stream.subscribe(EXCHANGE_NSE_FO, list(tokens.values()))
+        if spot_token:
+            self.stream.subscribe(EXCHANGE_NSE_CM, [spot_token])
+        return m
+
+    def apply(self, chain: OptionChain) -> int:
+        """Overwrite snapshot prices with the latest ticks. Returns how many quotes changed."""
+        if chain.currency != "INR":
+            return 0
+        m = self._mapping(chain)
+        if not m:
+            return 0
+        latest = 0
+        applied = 0
+        if m["spot"]:
+            t = self.stream.tick(m["spot"])
+            if t and t.get("ltp"):
+                chain.spot = t["ltp"]
+                latest = max(latest, t.get("exchange_ts") or 0)
+        for r in chain.rows:
+            for q in (r.call, r.put):
+                if q is None:
+                    continue
+                token = m["tokens"].get((r.strike, q.option_type))
+                t = self.stream.tick(token) if token else None
+                if not t or not t.get("ltp"):
+                    continue
+                q.ltp = t["ltp"]
+                if t.get("bid") is not None:
+                    q.bid, q.bid_qty = t["bid"], t.get("bid_qty")
+                if t.get("ask") is not None:
+                    q.ask, q.ask_qty = t["ask"], t.get("ask_qty")
+                if t.get("volume") is not None:
+                    q.volume = int(t["volume"])
+                if t.get("oi") is not None:
+                    q.oi = float(t["oi"])
+                if t.get("close"):
+                    q.change = round(t["ltp"] - t["close"], 2)
+                ts = t.get("exchange_ts") or 0
+                q.tick_ts = datetime.fromtimestamp(ts / 1000, timezone.utc).isoformat() if ts else None
+                # Recompute IV/Greeks from the new price.
+                q.iv = q.delta = q.gamma = q.theta = q.vega = None
+                latest = max(latest, ts)
+                applied += 1
+        if applied or latest:
+            enrich_chain(chain, self.r)
+            chain.live_at = datetime.fromtimestamp(latest / 1000, timezone.utc).isoformat() if latest else None
+            note = "Live: prices updated tick-by-tick from Angel One's exchange feed"
+            if note not in chain.notes:
+                chain.notes.append(note)
+        return applied
+
+    def status(self) -> dict:
+        s = self.stream.status()
+        s["error"] = self.last_error or s.get("last_error")
+        return s

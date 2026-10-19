@@ -42,6 +42,8 @@ class Settings:
             os.getenv("OPTION_TRADER_DATA_DIR") or Path.home() / ".option_trader"
         ).expanduser()
     )
+    stale_seconds: float = field(default_factory=lambda: _float_env("OPTION_TRADER_STALE_SECONDS", 180.0))
+    live_ticks: bool = field(default_factory=lambda: os.getenv("OPTION_TRADER_LIVE_TICKS", "1") not in ("0", "false", "no"))
     angel_api_key: str = field(default_factory=lambda: os.getenv("ANGEL_API_KEY", ""))
     angel_client_code: str = field(default_factory=lambda: os.getenv("ANGEL_CLIENT_CODE", ""))
     angel_pin: str = field(default_factory=lambda: os.getenv("ANGEL_PIN", ""))

@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark light">
+  <script>
+    // Apply the saved theme before first paint (dark unless the user picked light).
+    try { if (localStorage.getItem("ot-theme") === "light") document.documentElement.dataset.theme = "light"; } catch (_) {}
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Option Trader</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23121821%22/%3E%3Cpath d=%22M4 24 L12 14 L18 19 L28 7%22 stroke=%22%2322c55e%22 stroke-width=%223%22 fill=%22none%22/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Option Trader</div>
+  <form id="controls" class="controls" autocomplete="off">
+    <label>Symbol
+      <input id="symbol" list="symbols" value="NIFTY" required>
+      <datalist id="symbols">
+        <option>NIFTY</option><option>BANKNIFTY</option><option>FINNIFTY</option>
+        <option>MIDCPNIFTY</option><option>RELIANCE</option><option>HDFCBANK</option>
+        <option>ICICIBANK</option><option>INFY</option><option>TCS</option><option>SBIN</option>
+      </datalist>
+    </label>
+    <label>Expiry <select id="expiry"></select></label>
+    <label>Source
+      <select id="source">
+        <option value="">Auto</option><option value="nse">NSE</option>
+        <option value="angelone">Angel One</option><option value="yahoo">Yahoo</option>
+      </select>
+    </label>
+    <button type="submit" class="primary">Load</button>
+    <label class="inline"><input type="checkbox" id="autorefresh" checked> Auto-refresh
+      <select id="refresh-sec" title="Snapshot refresh interval while the market is open">
+        <option value="5">5s</option><option value="10">10s</option><option value="15" selected>15s</option>
+        <option value="30">30s</option><option value="60">60s</option>
+      </select></label>
+  </form>
+  <div class="status">
+    <button id="theme-toggle" class="theme-toggle" type="button" title="Switch light/dark theme">☀️</button>
+    <span id="live-badge" class="pill bearish" title="Real-time exchange ticks">Snapshot</span>
+    <span id="market-badge" class="pill neutral" title="NSE trading session">market…</span>
+    <span id="online-dot" class="dot"></span><span id="online-text">checking…</span>
+  </div>
+</header>
+
+<div id="ticker" class="ticker" aria-label="Market indices"></div>
+<div id="banner" class="banner hidden"></div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="chain">Option Chain</button>
+  <button class="tab" data-tab="watchlist">Watchlist</button>
+  <button class="tab" data-tab="charts">Charts</button>
+  <button class="tab" data-tab="signals">Signals &amp; Ideas</button>
+  <button class="tab" data-tab="builder">Strategy Builder</button>
+  <button class="tab" data-tab="screener">Screener</button>
+  <button class="tab" data-tab="portfolio">Paper Portfolio</button>
+  <button class="tab" data-tab="alerts">Alerts <span id="alert-count" class="pill neutral hidden">0</span></button>
+</nav>
+
+<main>
+  <section id="tab-chain" class="panel active">
+    <div class="meta" id="chain-meta"></div>
+    <div class="row chain-tools">
+      <label>Strikes around ATM
+        <select id="strike-window">
+          <option value="5">±5</option><option value="10" selected>±10</option><option value="15">±15</option>
+          <option value="25">±25</option><option value="0">All</option>
+        </select>
+      </label>
+      <span class="muted">Columns:</span>
+      <label class="inline"><input type="checkbox" data-col="oi" checked> OI</label>
+      <label class="inline"><input type="checkbox" data-col="vol" checked> Volume</label>
+      <label class="inline"><input type="checkbox" data-col="iv" checked> IV</label>
+      <label class="inline"><input type="checkbox" data-col="greeks" checked> Delta</label>
+      <label class="inline"><input type="checkbox" data-col="greeks2"> Gamma/Theta/Vega</label>
+      <label class="inline"><input type="checkbox" data-col="quote" checked> Bid/Ask</label>
+      <button id="jump-atm" type="button">Jump to ATM</button>
+      <button id="export-csv" type="button">Export CSV</button>
+    </div>
+    <div class="table-wrap">
+      <table id="chain-table" class="chain">
+        <thead>
+          <tr class="side-head"><th colspan="12" class="side-cell">CALLS</th><th></th><th colspan="12" class="side-cell">PUTS</th></tr>
+          <tr>
+            <th class="c-oi">OI</th><th class="c-oi">Chg OI</th><th class="c-vol">Volume</th><th class="c-iv">IV</th>
+            <th class="c-greeks2">Vega</th><th class="c-greeks2">Theta</th><th class="c-greeks2">Gamma</th><th class="c-greeks">Delta</th>
+            <th class="c-quote" title="Bid/ask spread as % of mid">Spr%</th><th class="c-quote">Bid</th><th class="c-quote">Ask</th><th>LTP</th>
+            <th class="strike">Strike</th>
+            <th>LTP</th><th class="c-quote">Bid</th><th class="c-quote">Ask</th><th class="c-quote" title="Bid/ask spread as % of mid">Spr%</th><th class="c-greeks">Delta</th>
+            <th class="c-greeks2">Gamma</th><th class="c-greeks2">Theta</th><th class="c-greeks2">Vega</th>
+            <th class="c-iv">IV</th><th class="c-vol">Volume</th><th class="c-oi">Chg OI</th><th class="c-oi">OI</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="hint">Every number above comes from the live source shown. Click a call/put LTP to add it to the Strategy Builder.</p>
+  </section>
+
+  <section id="tab-watchlist" class="panel">
+    <form id="wl-form" class="row" autocomplete="off">
+      <label>Add symbol <input id="wl-add" list="symbols" placeholder="e.g. RELIANCE"></label>
+      <button type="submit">Add</button>
+      <button type="button" id="wl-refresh" class="primary">Refresh</button>
+      <span id="wl-status" class="muted"></span>
+    </form>
+    <div class="table-wrap"><table class="simple watch">
+      <thead><tr><th>Symbol</th><th>Spot</th><th>Expiry</th><th>PCR (OI)</th><th>ATM IV</th><th>ATM straddle</th>
+        <th>Max pain</th><th>Support</th><th>Resistance</th><th>OI bias</th><th>Source</th><th></th></tr></thead>
+      <tbody id="wl-body"></tbody>
+    </table></div>
+    <p class="muted">Each row is the symbol's live nearest-expiry chain. Click a symbol to open its chain. Sources are rate-limited, so large lists take a few seconds.</p>
+  </section>
+
+  <section id="tab-charts" class="panel">
+    <div class="chart-grid">
+      <div class="card"><h3>Open interest by strike</h3><div id="ch-oi" class="chart"></div></div>
+      <div class="card"><h3>Change in open interest</h3><div id="ch-oichg" class="chart"></div></div>
+      <div class="card"><h3>IV smile</h3><div id="ch-smile" class="chart"></div></div>
+      <div class="card"><h3>IV term structure <button id="load-term" class="small-btn">Load</button></h3><div id="ch-term" class="chart"><p class="muted">Fetches the next expiries' live chains. Press Load.</p></div></div>
+      <div class="card wide"><h3>Intraday: spot, PCR and ATM IV</h3><div id="ch-intraday" class="chart"></div>
+        <p class="muted">Recorded from each live fetch while the app is running (resets daily and on restart).</p></div>
+    </div>
+  </section>
+
+  <section id="tab-signals" class="panel">
+    <div class="row">
+      <button id="load-signals" class="primary">Analyse now</button>
+      <label class="inline">Lots <input id="idea-lots" type="number" min="1" value="1" class="small"></label>
+    </div>
+    <div id="signals-out"><p class="muted">Press “Analyse now” to compute signals and trade ideas from the live chain and price history.</p></div>
+  </section>
+
+  <section id="tab-builder" class="panel">
+    <div class="builder">
+      <div class="builder-side">
+        <div class="card">
+          <h3>1. Pick a strategy</h3>
+          <label>Strategy <select id="tpl-select"></select></label>
+          <p id="tpl-desc" class="muted"></p>
+          <div class="row">
+            <label>Lots <input id="tpl-lots" type="number" min="1" value="1" class="small"></label>
+            <label title="Multiply the distance between strikes">Width <input id="tpl-width" type="number" min="1" value="1" class="small"></label>
+            <label title="Move all strikes up/down by N strikes">ATM shift <input id="tpl-shift" type="number" value="0" class="small"></label>
+            <label>Fill
+              <select id="tpl-fill"><option value="ltp">LTP</option><option value="mid">Mid</option><option value="market">Bid/Ask</option></select>
+            </label>
+          </div>
+          <div class="row">
+            <button id="tpl-apply" class="primary">Put on current chain</button>
+            <button id="tpl-delete" class="danger hidden">Delete saved</button>
+          </div>
+          <div class="row" style="align-items:center">
+            <button id="tpl-export" type="button" title="Download the selected strategy as a file">Export</button>
+            <label class="file-btn">Import <input id="tpl-import" type="file" accept=".json,application/json" hidden></label>
+          </div>
+        </div>
+        <div class="card">
+          <h3>2. Edit legs</h3>
+          <div class="table-wrap"><table class="legs">
+            <thead><tr><th>Side</th><th>Type</th><th>Expiry</th><th>Strike</th><th>Lots</th><th title="Leave blank to use the live price">Entry price</th><th>Live</th><th></th></tr></thead>
+            <tbody id="legs-body"></tbody>
+          </table></div>
+          <div class="row">
+            <button id="leg-add">+ Add leg</button>
+            <button id="opt-run" class="primary optimise-btn" title="Move these legs toward the best win rate / profit on live prices">✨ Optimise</button>
+            <button id="legs-clear" class="danger">Clear</button>
+          </div>
+          <p class="muted">Tip: click an LTP in the Option Chain to add a BUY leg (Shift+click to SELL). Blank entry price = live price.</p>
+        </div>
+        <div class="card" id="opt-card">
+          <h3>Optimiser settings</h3>
+          <label><span>Goal: <b id="opt-goal-label">balanced</b></span>
+            <div class="slider-ends"><span>Higher win rate</span><span>Higher profit</span></div>
+            <input id="opt-goal" type="range" min="0" max="100" step="5" value="50"></label>
+          <div class="row">
+            <label>Max loss (₹) <input id="opt-maxloss" type="number" min="0" step="500" placeholder="no limit" style="width:110px"></label>
+            <label>Max legs <input id="opt-maxlegs" type="number" min="1" max="6" value="4" class="small"></label>
+            <label>Max lots/leg <input id="opt-maxlots" type="number" min="1" max="20" value="3" class="small"></label>
+          </div>
+          <div class="row">
+            <label>Price model
+              <select id="opt-dist" title="How the probability of each outcome is estimated">
+                <option value="implied">Market-implied (whole chain)</option>
+                <option value="auto">Auto (signals + realised vol)</option>
+                <option value="atm">Fair value (ATM IV)</option>
+                <option value="realised">Realised volatility</option>
+              </select>
+            </label>
+            <label title="Your expected move by expiry; 0 = no view">My view (% by expiry) <input id="opt-drift" type="number" step="0.5" value="0" class="small"></label>
+            <label class="inline"><input type="checkbox" id="opt-unlimited"> Allow unlimited loss</label>
+          </div>
+          <div id="opt-result"></div>
+        </div>
+        <div class="card">
+          <h3>3. Scenario</h3>
+          <label><span>Target date: <b id="target-label"></b></span>
+            <input id="target-days" type="range" min="0" max="30" step="0.5" value="0"></label>
+          <label><span>IV change: <b id="iv-label">0</b> vol pts</span>
+            <input id="iv-shift" type="range" min="-15" max="15" step="0.5" value="0"></label>
+          <label><span>Price range: ±<b id="range-label">6</b>%</span>
+            <input id="range-pct" type="range" min="2" max="40" step="1" value="6"></label>
+        </div>
+        <div class="card">
+          <h3>4. Save as my strategy</h3>
+          <label>Name <input id="save-name" maxlength="80" placeholder="e.g. My wide condor"></label>
+          <label>View
+            <select id="save-view"><option>any</option><option>bullish</option><option>bearish</option><option>neutral</option><option>volatile</option></select>
+          </label>
+          <label>Notes <input id="save-desc" maxlength="300"></label>
+          <div class="row"><button id="save-btn" class="primary">Save strategy</button>
+            <button id="paper-btn" title="Open these legs as a paper position at live prices">Paper trade this</button></div>
+          <p id="save-msg" class="muted"></p>
+        </div>
+      </div>
+      <div class="builder-main">
+        <div id="payoff" class="payoff"></div>
+        <div id="builder-stats" class="cards"></div>
+        <div class="cards">
+          <div class="card"><h3>Position Greeks vs price
+            <select id="greek-pick" class="small-btn"><option value="delta">Delta</option><option value="gamma">Gamma</option>
+              <option value="theta">Theta / day</option><option value="vega">Vega / vol pt</option></select></h3>
+            <div id="greeks-chart" class="chart"></div></div>
+          <div class="card"><h3>P&amp;L at price levels</h3><div class="table-wrap"><table class="simple" id="pnl-table"></table></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="tab-screener" class="panel">
+    <form id="sc-form" class="row" autocomplete="off">
+      <label>View
+        <select id="sc-view"><option value="any">Any</option><option>bullish</option><option>bearish</option><option>neutral</option><option>volatile</option></select>
+      </label>
+      <label>Lots <input id="sc-lots" type="number" min="1" value="1" class="small"></label>
+      <label>Max loss (₹) <input id="sc-maxloss" type="number" min="0" step="500" placeholder="any" class="small" style="width:100px"></label>
+      <label>Min prob. of profit % <input id="sc-pop" type="number" min="0" max="100" value="0" class="small"></label>
+      <label>Sort by
+        <select id="sc-sort"><option value="score">Overall score</option><option value="pop">Prob. of profit</option>
+          <option value="reward_risk">Reward : risk</option><option value="max_profit">Max profit</option><option value="credit">Credit received</option></select>
+      </label>
+      <label class="inline"><input type="checkbox" id="sc-unlimited"> Allow unlimited loss</label>
+      <button type="submit" class="primary">Screen</button>
+      <span id="sc-status" class="muted"></span>
+    </form>
+    <div class="table-wrap"><table class="simple">
+      <thead><tr><th>#</th><th>Strategy</th><th>Width</th><th>Legs</th><th>Net premium</th><th>Max profit</th><th>Max loss</th>
+        <th>Breakevens</th><th>PoP</th><th>R:R</th><th>Score</th><th></th></tr></thead>
+      <tbody id="sc-body"><tr><td colspan="12" class="muted">Set filters and press Screen. Every strategy (built-in and yours) is placed on the live chain at several widths.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section id="tab-portfolio" class="panel">
+    <div class="row">
+      <button id="pf-refresh" class="primary">Refresh prices</button>
+      <label>Fill when closing
+        <select id="pf-fill"><option value="ltp">LTP</option><option value="mid">Mid</option><option value="market">Bid/Ask</option></select>
+      </label>
+      <span id="pf-summary" class="muted"></span>
+    </div>
+    <div id="pf-list"><p class="muted">No paper positions yet. Build a strategy and press “Paper trade this”.</p></div>
+    <p class="muted">Paper trades are opened, valued and closed at live chain prices. No real orders are placed.</p>
+  </section>
+  <section id="tab-alerts" class="panel">
+    <form id="al-form" class="row" autocomplete="off">
+      <label>Symbol <input id="al-symbol" list="symbols" placeholder="current" class="small" style="width:120px"></label>
+      <label>When
+        <select id="al-metric">
+          <option value="spot">Spot price</option><option value="pcr">PCR (OI)</option>
+          <option value="atm_iv">ATM IV %</option><option value="ltp">Option LTP</option>
+        </select>
+      </label>
+      <label class="al-ltp hidden">Strike <input id="al-strike" type="number" step="any" class="small" style="width:100px"></label>
+      <label class="al-ltp hidden">Type <select id="al-type"><option>CE</option><option>PE</option></select></label>
+      <label>is
+        <select id="al-op"><option value="above">above</option><option value="below">below</option></select>
+      </label>
+      <label>Value <input id="al-value" type="number" step="any" required class="small" style="width:110px"></label>
+      <button type="submit" class="primary">Add alert</button>
+      <button type="button" id="al-notify">Enable desktop notifications</button>
+    </form>
+    <div class="table-wrap"><table class="simple">
+      <thead><tr><th>Symbol</th><th>Condition</th><th>Last value</th><th>Status</th><th></th></tr></thead>
+      <tbody id="al-body"></tbody>
+    </table></div>
+    <p class="muted">Alerts are checked against live data each time the chain for that symbol refreshes while this page is open (every 30 s in market hours). Each alert fires once; re-arm it to watch again.</p>
+  </section>
+</main>
+<div id="toasts" class="toasts"></div>
+
+<footer class="foot">
+  Live data from NSE, Angel One SmartAPI or Yahoo Finance. Not investment advice.
+</footer>
+
+<script src="/static/vendor/plotly-2.35.2.min.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/builder.js"></script>
+<script src="/static/charts.js"></script>
+<script src="/static/watchlist.js"></script>
+<script src="/static/portfolio.js"></script>
+<script src="/static/screener.js"></script>
+<script src="/static/alerts.js"></script>
+</body>
+</html>

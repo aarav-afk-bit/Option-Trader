@@ -18,6 +18,7 @@ dependencies = [
     "yfinance>=0.2.40",
     "pyotp>=2.9",
     "python-dotenv>=1.0",
+    "websocket-client>=1.7",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +31,7 @@ option-trader = "option_trader.__main__:main"
 include = ["option_trader*"]
 
 [tool.setuptools.package-data]
-option_trader = ["web/static/*"]
+option_trader = ["web/static/*", "web/static/vendor/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,14 @@
+{
+  "records": {
+    "timestamp": "14-Oct-2026 15:30:00",
+    "underlyingValue": 1402.6,
+    "data": [
+      {"strikePrice": 1400, "expiryDates": "27-Oct-2026",
+       "CE": {"strikePrice": 1400, "openInterest": 3500, "changeinOpenInterest": 120, "totalTradedVolume": 9800, "impliedVolatility": 22.4, "lastPrice": 31.2, "change": 1.2, "buyPrice1": 31.0, "buyQuantity1": 500, "sellPrice1": 31.4, "sellQuantity1": 1000},
+       "PE": {"strikePrice": 1400, "openInterest": 2500, "changeinOpenInterest": -50, "totalTradedVolume": 7800, "impliedVolatility": 23.1, "lastPrice": 27.9, "change": -0.6, "buyPrice1": 27.7, "buyQuantity1": 500, "sellPrice1": 28.1, "sellQuantity1": 500}},
+      {"strikePrice": 1420, "expiryDates": "27-Oct-2026",
+       "CE": {"strikePrice": 1420, "openInterest": 4100, "lastPrice": 22.0, "impliedVolatility": 21.9},
+       "PE": {"strikePrice": 1420, "openInterest": 1500, "lastPrice": 38.5, "impliedVolatility": 23.8}}
+    ]
+  }
+}
