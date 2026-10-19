@@ -17,6 +17,14 @@ An options-market analysis tool and strategy builder for NSE (and US) options th
   width or ATM shift, edit every leg (side, type, expiry, strike, lots, entry price), and see
   P&L at expiry, today and at a target date (with an IV-change slider). Breakevens, max
   profit/loss, probability of profit and position Greeks update as you edit.
+- **⚡ Quick trade.** Answer three plain questions (what you expect, how much you're willing to
+  lose, safer vs bigger profit) and get an optimised trade on live prices, explained in plain
+  sentences, ready to open in the builder or paper trade.
+- **Settings page with a connection doctor.** Enter Angel One details, reorder data sources and
+  set charges in the app; "Test connections" tells you in plain words how to fix any problem.
+- **Data you can trust**: every chain gets a data-quality score (crossed books, stale trades,
+  parity breaks and IV outliers are flagged and kept out of the analysis), can be cross-checked
+  against a second source, and futures legs use real exchange futures prices.
 - **✨ Optimise.** Press Optimise while building a strategy and it moves step by step toward the
   version with the best blend of win rate and expected profit on the live chain right now (you
   choose the balance with a slider). It tries moving strikes, changing lots, adding protective

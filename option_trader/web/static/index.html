@@ -54,6 +54,7 @@
       </select></label>
   </form>
   <div class="status">
+    <button id="qt-open" class="qt-btn" type="button" title="Answer 3 questions and get a ready-made trade (Q)">⚡ Quick trade</button>
     <button id="fx-toggle" class="fx-toggle" type="button" title="Turn visual effects (animations, scanlines) on or off">FX</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="Switch light/dark theme">☀️</button>
     <span id="live-badge" class="pill bearish" title="Real-time exchange ticks">Snapshot</span>
@@ -416,11 +417,18 @@
     <div class="muted">Shortcuts</div>
     <div><kbd>1</kbd>–<kbd>9</kbd> sections</div>
     <div><kbd>/</kbd> symbol · <kbd>R</kbd> refresh</div>
-    <div><kbd>O</kbd> optimise · <kbd>T</kbd> theme</div>
+    <div><kbd>O</kbd> optimise · <kbd>Q</kbd> quick trade</div>
     <div><kbd>Ctrl K</kbd> commands · <kbd>?</kbd> help</div>
   </div>
 </aside>
 <button type="button" id="hud-reopen" class="hud-reopen hidden" title="Show live status panel (])">HUD</button>
+</div>
+
+<div id="qt" class="cmd hidden" role="dialog" aria-modal="true" aria-label="Quick trade">
+  <div class="qt-box neon-panel">
+    <div class="qt-head"><span class="qt-title">Quick trade</span><span id="qt-sym" class="muted"></span><button type="button" id="qt-close" class="icon-btn" title="Close (Esc)">×</button></div>
+    <div id="qt-body"></div>
+  </div>
 </div>
 
 <div id="cmd" class="cmd hidden" role="dialog" aria-modal="true" aria-label="Command palette">
@@ -448,5 +456,6 @@
 <script src="/static/guide.js"></script>
 <script src="/static/fx.js"></script>
 <script src="/static/settings.js"></script>
+<script src="/static/quicktrade.js"></script>
 </body>
 </html>

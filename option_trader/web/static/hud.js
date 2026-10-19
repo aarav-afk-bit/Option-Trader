@@ -76,6 +76,7 @@
   function commands(q) {
     const list = [
       ...TABS.map((t, i) => ({ label: `Go to ${t.label}`, key: String(i + 1), run: () => App.switchTab(t.tab) })),
+      { label: "Quick trade: answer 3 questions, get a trade", key: "Q", run: () => App.quickTrade && App.quickTrade() },
       { label: "Optimise the current strategy", key: "O", run: optimise },
       { label: "Refresh live data now", key: "R", run: () => App.loadChain(true) },
       { label: "Toggle light / dark theme", key: "T", run: () => $("#theme-toggle").click() },
@@ -129,7 +130,7 @@
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openCmd(); return; }
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
-    if (e.key === "Escape") { closeCmd(); if (typing) document.activeElement.blur(); return; }
+    if (e.key === "Escape") { closeCmd(); if (App.closeQuickTrade) App.closeQuickTrade(); if (typing) document.activeElement.blur(); return; }
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
     const n = Number(e.key);
     if (n >= 1 && n <= TABS.length) { App.switchTab(TABS[n - 1].tab); return; }
@@ -137,6 +138,7 @@
       case "/": e.preventDefault(); $("#symbol").focus(); $("#symbol").select(); break;
       case "r": case "R": App.loadChain(true); break;
       case "o": case "O": optimise(); break;
+      case "q": case "Q": if (App.quickTrade) App.quickTrade(); break;
       case "t": case "T": $("#theme-toggle").click(); break;
       case "[": $("#side-collapse").click(); break;
       case "]": setHud(!document.body.classList.contains("hud-hidden")); break;

@@ -490,3 +490,27 @@ td.suspect::before { content: "⚠"; position: absolute; left: 4px; font-size: 1
 .st-advice { color: var(--amber); font-size: 13px; }
 .st-raw { color: var(--muted); font-size: 11.5px; word-break: break-word; }
 .st-advice { color: var(--text) !important; }
+
+/* ---------- quick trade wizard ---------- */
+button.qt-btn { border-color: var(--green); color: var(--green); box-shadow: 0 0 8px rgba(57, 255, 136, .3); }
+button.qt-btn:hover:not(:disabled) { color: var(--green); border-color: var(--green); box-shadow: 0 0 14px rgba(57, 255, 136, .5); }
+.qt-box.neon-panel { position: relative; top: 0; width: min(640px, calc(100vw - 24px)); max-height: 86vh; padding: 14px 18px; }
+.qt-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.qt-head .icon-btn { margin-left: auto; }
+.qt-title { font-family: var(--font-display); font-size: 14px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); }
+.qt-steps { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.qt-steps .on { color: var(--accent); font-weight: 600; } .qt-steps .done { color: var(--green); }
+.qt-views { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.qt-view { display: grid; text-align: left; gap: 2px; padding: 10px 12px; font-weight: 500; }
+.qt-view small { color: var(--muted); font-size: 12px; }
+.qt-view.sel { border-color: var(--accent); background: rgba(0, 229, 255, .08); box-shadow: var(--glow); }
+.qt-ic { font-size: 18px; }
+.qt-nav { justify-content: space-between; margin-top: 14px; }
+.qt-name { margin: 4px 0 8px; color: var(--accent); font-size: 16px; }
+.qt-legs { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; }
+.qt-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.qt-stats div { border: 1px solid var(--border); padding: 8px 10px; display: grid; }
+.qt-stats small { color: var(--muted); font-size: 12px; }
+.qt-stats b { font-size: 18px; font-family: var(--font-mono); }
+#qt-risk { width: 160px; }
+.qt-box.neon-panel::after, .cmd-box.neon-panel::after { display: none; }
