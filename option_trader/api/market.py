@@ -27,6 +27,30 @@ def market(manager: ProviderManager = Depends(get_manager)) -> dict:
     return manager.market_status()
 
 
+@router.get("/verify")
+def verify(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None,
+           manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Compare the chain with a second, independent source."""
+    from ..verify import compare, pick_secondary
+
+    try:
+        primary = manager.get_chain(symbol, parse_expiry(expiry), source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    other = pick_secondary(manager, primary.source)
+    if other is None:
+        return {"available": False, "primary": primary.source,
+                "reason": "Cross-checking needs a second source: configure Angel One (or NSE) as well."}
+    try:
+        secondary = manager.get_chain(symbol, primary.expiry, other)
+    except DataUnavailableError as exc:
+        return {"available": False, "primary": primary.source, "secondary": other, "reason": str(exc)}
+    out = compare(primary, secondary)
+    out["available"] = True
+    primary.verification = {k: out[k] for k in ("secondary", "agree_pct", "confidence", "matched")}
+    return out
+
+
 @router.get("/indices")
 def indices(manager: ProviderManager = Depends(get_manager)) -> dict:
     from ..indices import get_indices

@@ -195,6 +195,36 @@ function dayMove(ch) {
   return ` <span class="${signCls(chg)}" title="Change from previous close ${fmt(idx.prev_close)}">${chg >= 0 ? "+" : ""}${fmt(chg)} (${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%)</span>`;
 }
 
+function verifyBadge(v) {
+  if (!v) return "";
+  const cls = v.confidence === "high" ? "bullish" : v.confidence === "medium" ? "neutral" : "bearish";
+  return `<span class="pill ${cls}" title="${v.matched} prices compared with ${esc(String(v.secondary).toUpperCase())}">Cross-checked ${esc(String(v.secondary).toUpperCase())} · ${v.agree_pct}% agree</span>`;
+}
+
+async function crossCheck(silent = false) {
+  if (!App.chain) return;
+  const btn = $("#verify-btn");
+  btn.disabled = true;
+  try {
+    const d = await api("/api/verify?" + qs({ symbol: App.chain.symbol, expiry: App.chain.expiry, source: $("#source").value }));
+    if (!d.available) { if (!silent) showBanner(d.reason, "info"); return; }
+    App.chain.verification = { secondary: d.secondary, agree_pct: d.agree_pct, confidence: d.confidence, matched: d.matched };
+    renderChain(App.chain);
+    const worst = d.disagreements.slice(0, 5).map((x) => `${x.strike} ${x.type}: ${x.primary} vs ${x.secondary}`).join(" · ");
+    if (!silent || d.confidence !== "high") {
+      showBanner(`Cross-check vs ${d.secondary.toUpperCase()}: ${d.agree}/${d.matched} prices agree (${d.agree_pct}%), spot differs by ${d.spot_diff}. ` +
+        (worst ? `Largest differences: ${worst}` : "All prices agree within spread and timing tolerance."), d.confidence === "low" ? "error" : "info");
+    }
+  } catch (e) {
+    if (!silent) showBanner(`Cross-check failed: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+App.crossCheck = crossCheck;
+$("#verify-btn").addEventListener("click", () => crossCheck(false));
+setInterval(() => { if ($("#verify-auto").checked && App.market && App.market.open && !document.hidden) crossCheck(true); }, 120000);
+
 function qualityBadge(ch) {
   const q = ch.quality;
   if (!q) return "";
@@ -226,6 +256,7 @@ function renderChain(ch) {
     ${ch.live_at ? `<span class="pill bullish">Live tick ${esc(new Date(ch.live_at).toLocaleTimeString())}</span>` : ""}
     ${ageBadge(ch)}
     ${qualityBadge(ch)}
+    ${verifyBadge(ch.verification)}
     <span>Snapshot <b>${esc(ts)}</b>${ch.exchange_timestamp ? ` · exchange time <b>${esc(ch.exchange_timestamp)}</b>` : ""}</span>
     ${App.market && !App.market.open && !(ch.live_at && Date.now() - new Date(ch.live_at).getTime() < 120000) ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
     ${ch.notes.map((n) => `<span class="muted">${esc(n)}</span>`).join("")}`;
