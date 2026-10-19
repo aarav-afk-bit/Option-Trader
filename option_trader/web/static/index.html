@@ -92,6 +92,9 @@
   <button class="tab" data-tab="alerts" title="Alerts (key 8)">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span class="lbl">Alerts</span> <span id="alert-count" class="pill neutral hidden">0</span><kbd>8</kbd>
   </button>
+  <button class="tab" data-tab="settings" title="Settings &amp; connections (key 9)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="lbl">Settings</span><kbd>9</kbd>
+  </button>
   <div class="side-foot">
     <button type="button" id="tour-open" class="side-btn" title="Take the 1-minute guided tour">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg><span class="lbl">Guide</span><kbd>?</kbd>
@@ -317,6 +320,51 @@
     <div id="pf-list"><p class="muted">No paper positions yet. Build a strategy and press “Paper trade this”.</p></div>
     <p class="muted">Paper trades are opened, valued and closed at live chain prices. No real orders are placed.</p>
   </section>
+  <section id="tab-settings" class="panel">
+    <div class="cards settings-grid">
+      <div class="card">
+        <h3>1. Check your connections</h3>
+        <p class="muted">Tests the internet, NSE, Angel One and Yahoo Finance from this computer and tells you how to fix anything that fails.</p>
+        <div class="row"><button id="st-test" class="primary" type="button">Test connections</button></div>
+        <div id="st-test-out"></div>
+      </div>
+      <div class="card">
+        <h3>2. Angel One (for live tick-by-tick prices)</h3>
+        <p class="muted">Optional. Create a free SmartAPI app at smartapi.angelbroking.com and enable TOTP. Details are saved only on this computer in a private file; leave a field blank to keep what is saved.</p>
+        <div id="st-angel-status" class="muted"></div>
+        <label>API key <input id="st-api-key" autocomplete="off" spellcheck="false"></label>
+        <label>Client code <input id="st-client" autocomplete="off" spellcheck="false"></label>
+        <label>PIN <input id="st-pin" type="password" autocomplete="new-password"></label>
+        <label>TOTP secret <input id="st-totp" type="password" autocomplete="off" placeholder="the text code shown when you enabled TOTP"></label>
+        <div class="row"><button id="st-angel-save" class="primary" type="button">Save Angel One details</button>
+          <button id="st-angel-clear" class="danger" type="button">Remove</button></div>
+      </div>
+      <div class="card">
+        <h3>3. Data sources</h3>
+        <p class="muted">The app tries these in order and uses the first that answers with fresh data.</p>
+        <ol id="st-sources" class="st-sources"></ol>
+        <label class="inline"><input type="checkbox" id="st-live"> Stream live ticks from Angel One when available</label>
+        <div class="row">
+          <label>Refresh cache (s) <input id="st-ttl" type="number" min="1" max="600" class="small"></label>
+          <label>Stale after (s) <input id="st-stale" type="number" min="10" max="3600" class="small"></label>
+          <label>Risk-free rate % <input id="st-rate" type="number" step="0.05" min="0" max="30" class="small"></label>
+        </div>
+      </div>
+      <div class="card">
+        <h3>4. Trading charges</h3>
+        <p class="muted">Used for net P&amp;L. Defaults follow current Indian F&amp;O rates; match them to your broker.</p>
+        <div class="row">
+          <label>Brokerage ₹/order <input id="st-OPTION_TRADER_BROKERAGE_PER_ORDER" type="number" step="1" min="0" class="small" placeholder="20"></label>
+          <label>STT on sell (fraction) <input id="st-OPTION_TRADER_STT_SELL" type="number" step="0.0001" min="0" class="small" style="width:100px" placeholder="0.001"></label>
+          <label>Exchange charge <input id="st-OPTION_TRADER_EXCHANGE_TXN" type="number" step="0.000001" min="0" class="small" style="width:110px" placeholder="0.0003503"></label>
+          <label>GST <input id="st-OPTION_TRADER_GST" type="number" step="0.01" min="0" class="small" placeholder="0.18"></label>
+        </div>
+        <div class="row"><button id="st-save" class="primary" type="button">Save settings</button><span id="st-msg" class="muted"></span></div>
+        <p class="muted" id="st-dir"></p>
+      </div>
+    </div>
+  </section>
+
   <section id="tab-alerts" class="panel">
     <form id="al-form" class="row" autocomplete="off">
       <label>Symbol <input id="al-symbol" list="symbols" placeholder="current" class="small" style="width:120px"></label>
@@ -366,7 +414,7 @@
   <div class="hud-sep"></div>
   <div class="hud-keys">
     <div class="muted">Shortcuts</div>
-    <div><kbd>1</kbd>–<kbd>8</kbd> sections</div>
+    <div><kbd>1</kbd>–<kbd>9</kbd> sections</div>
     <div><kbd>/</kbd> symbol · <kbd>R</kbd> refresh</div>
     <div><kbd>O</kbd> optimise · <kbd>T</kbd> theme</div>
     <div><kbd>Ctrl K</kbd> commands · <kbd>?</kbd> help</div>
@@ -399,5 +447,6 @@
 <script src="/static/hud.js"></script>
 <script src="/static/guide.js"></script>
 <script src="/static/fx.js"></script>
+<script src="/static/settings.js"></script>
 </body>
 </html>
