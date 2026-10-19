@@ -239,12 +239,30 @@ class ProviderManager:
                 accept=None if source else self._is_fresh,
             )
             self._flag_staleness(chain)  # type: ignore[arg-type]
+            self._attach_futures(chain)  # type: ignore[arg-type]
             enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
             self._store(key, chain)
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
 
         return self._apply_live(self._single_flight(key, fetch))  # type: ignore[arg-type]
+
+    def _attach_futures(self, chain: OptionChain) -> None:
+        """Best effort: the exchange futures price for this expiry from the same source."""
+        key = ("futures", chain.symbol, chain.source)
+        prices = self._cached(key)
+        if prices is None:
+            prices = {}
+            try:
+                p = self.provider(chain.source)
+                if hasattr(p, "get_futures"):
+                    prices = p.get_futures(chain.symbol)  # type: ignore[attr-defined]
+            except Exception as exc:  # futures are an enhancement; never fail the chain
+                log.info("Futures quote unavailable for %s: %s", chain.symbol, exc)
+            self._store(key, prices)
+        chain.futures_ltp = prices.get(chain.expiry) if prices else None
+        if chain.futures_ltp:
+            chain.notes.append(f"Futures leg priced at the exchange futures quote {chain.futures_ltp:,.2f}")
 
     def _is_fresh(self, chain) -> bool:
         """During market hours, reject snapshots older than ``stale_seconds`` so the next source
