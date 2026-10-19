@@ -101,7 +101,7 @@ def leg_from_chain(chain: OptionChain, option_type: LegType, action: Action, str
     buying, receive the bid when selling).
     """
     if option_type == "FUT":
-        return Leg("FUT", action, 0.0, lots, chain.spot, chain.expiry, None, chain.expiry_at)
+        return Leg("FUT", action, 0.0, lots, chain.fut_price or chain.spot, chain.expiry, None, chain.expiry_at)
     q = chain.quote(strike, option_type)
     if q is None:
         raise ValueError(f"{strike:g} {option_type} is not in the {chain.symbol} chain")
@@ -187,9 +187,10 @@ def greeks_vec(s: np.ndarray, k: float, t: float, r: float, sigma: float,
 
 def _leg_value(leg: Leg, s: np.ndarray, at: datetime, r: float, iv: float, q: float = 0.0) -> np.ndarray:
     """Per-unit value of the leg's instrument at time ``at`` across prices ``s``."""
-    if leg.option_type == "FUT":
-        return s.astype(float)
     t = _years(at, leg.expiry_datetime())
+    if leg.option_type == "FUT":
+        # A future is worth the forward of the spot over its remaining life (spot at expiry).
+        return s.astype(float) * math.exp((r - q) * t)
     if t <= 0:
         if leg.option_type == "CE":
             return np.maximum(s - leg.strike, 0.0)

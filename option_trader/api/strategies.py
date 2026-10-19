@@ -65,7 +65,7 @@ def build_strategy(body: AnalyzeIn, manager: ProviderManager):
         if raw.expiry and parse_expiry(raw.expiry) != chain.expiry:
             leg_chain = manager.get_chain(body.symbol, parse_expiry(raw.expiry), chain.source)
         if otype == "FUT":
-            leg = Leg("FUT", action, 0.0, raw.lots, raw.premium or chain.spot, leg_chain.expiry,
+            leg = Leg("FUT", action, 0.0, raw.lots, raw.premium or leg_chain.fut_price or leg_chain.spot, leg_chain.expiry,
                       None, leg_chain.expiry_at)  # type: ignore[arg-type]
         else:
             q = leg_chain.quote(raw.strike, otype)  # type: ignore[arg-type]

@@ -117,6 +117,8 @@ class OptionChain:
     # Market-implied forward (put-call parity) and the carry yield q it implies.
     forward: Optional[float] = None
     carry: float = 0.0
+    # Price a futures leg for this expiry trades at: the implied forward, or spot carried at r.
+    fut_price: Optional[float] = None
 
     def __post_init__(self) -> None:
         self.rows.sort(key=lambda r: r.strike)
@@ -213,6 +215,7 @@ class OptionChain:
             "notes": self.notes,
             "live_at": self.live_at,
             "forward": self.forward,
+            "fut_price": self.fut_price,
             "carry": self.carry,
             "data_age_seconds": self.data_age_seconds(),
             "rows": [r.to_dict() for r in self.rows],
