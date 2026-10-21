@@ -101,7 +101,7 @@ class PortfolioStore:
             exp = date.fromisoformat(leg["expiry"]) if leg.get("expiry") else base.expiry
             ch = base if exp == base.expiry else chain_for(exp)
             if otype == "FUT":
-                price, strike = ch.spot, 0.0
+                price, strike = ch.fut_price or ch.spot, 0.0
             else:
                 strike = float(leg["strike"])
                 price = leg_price(ch.quote(strike, otype), action, fill)  # type: ignore[arg-type]
@@ -143,7 +143,7 @@ class PortfolioStore:
             ch = chains.get(leg["expiry"]) or chain_for(exp)
             chains[leg["expiry"]] = ch
             if leg["option_type"] == "FUT":
-                px = ch.spot
+                px = ch.fut_price or ch.spot
             else:
                 px = exit_price(ch.quote(leg["strike"], leg["option_type"]), leg["action"], fill)
             if not px:
@@ -197,7 +197,7 @@ def mark_to_market(pos: dict, chain_for: Callable[[date], OptionChain]) -> dict:
             marks.append(None)
             continue
         if leg["option_type"] == "FUT":
-            marks.append(ch.spot)
+            marks.append(ch.fut_price or ch.spot)
         else:
             marks.append(mark_price(ch.quote(leg["strike"], leg["option_type"])))
     out["marks"] = marks
