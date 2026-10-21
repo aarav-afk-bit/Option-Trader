@@ -23,6 +23,8 @@ def implied_forward(chain: OptionChain, r: float, t: float, n: int = 5,
     vals = []
     for k in sorted(chain.strikes, key=lambda k: abs(k - chain.spot)):
         c, p = chain.quote(k, "CE"), chain.quote(k, "PE")
+        if (c and c.suspect) or (p and p.suspect):
+            continue
         cp = c.price if c else None
         pp = p.price if p else None
         if cp and pp:

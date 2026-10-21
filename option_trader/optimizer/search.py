@@ -99,7 +99,7 @@ class Optimizer:
         if t == "FUT":
             return True
         q = chain.quote(k, t)
-        if q is None:
+        if q is None or q.suspect:
             return False
         sp = q.spread_pct
         if sp is not None and sp > self.prefs.max_spread_pct:

@@ -42,6 +42,8 @@ class OptionQuote:
     vega: Optional[float] = None  # per 1 vol point (1%)
     symbol: Optional[str] = None  # source-specific identifier/trading symbol
     source_iv: Optional[float] = None  # IV as published by the data source, kept for reference
+    suspect: bool = False  # failed a data-quality check (see quality.py); shown but not relied on
+    issues: list = field(default_factory=list)
     tick_ts: Optional[str] = None  # exchange time of the last streamed tick applied to this quote
 
     @property
@@ -121,6 +123,7 @@ class OptionChain:
     fut_price: Optional[float] = None
     # Exchange-traded futures price for this expiry, when a future exists (monthly expiries).
     futures_ltp: Optional[float] = None
+    quality: Optional[dict] = None  # data-quality report (quality.report)
 
     def __post_init__(self) -> None:
         self.rows.sort(key=lambda r: r.strike)
@@ -218,6 +221,7 @@ class OptionChain:
             "live_at": self.live_at,
             "forward": self.forward,
             "fut_price": self.fut_price,
+            "quality": self.quality,
             "futures_ltp": self.futures_ltp,
             "carry": self.carry,
             "data_age_seconds": self.data_age_seconds(),
