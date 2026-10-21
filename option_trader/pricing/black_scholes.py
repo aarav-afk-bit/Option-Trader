@@ -115,7 +115,10 @@ def enrich_chain(chain: OptionChain, r: float, now: Optional[datetime] = None) -
     chain.forward = round(fwd, 2) if fwd else None
     chain.carry = carry_yield(chain.spot, fwd, r, t) if fwd else 0.0
     # A futures/underlying leg is never free money: it trades at the forward (cost of carry).
-    chain.fut_price = round(fwd if fwd else chain.spot * math.exp(r * t), 2) if chain.spot else None
+    if chain.futures_ltp:
+        chain.fut_price = chain.futures_ltp  # a real exchange futures quote beats any estimate
+    else:
+        chain.fut_price = round(fwd if fwd else chain.spot * math.exp(r * t), 2) if chain.spot else None
     q_ = chain.carry
     solved = 0
     for row in chain.rows:

@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import random
 import threading
 import time
 from datetime import date, datetime
@@ -136,6 +137,23 @@ def parse_chain_payload(
     return chain.validate()
 
 
+def parse_futures_quote(payload: dict) -> dict[date, float]:
+    """{expiry: last traded price} for the futures in an NSE quote-derivative payload."""
+    out: dict[date, float] = {}
+    for item in payload.get("stocks") or []:
+        md = item.get("metadata") or {}
+        if "future" not in str(md.get("instrumentType", "")).lower():
+            continue
+        try:
+            exp = parse_nse_date(md["expiryDate"])
+            px = float(md.get("lastPrice") or 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if px > 0:
+            out[exp] = px
+    return out
+
+
 def parse_lot_sizes(csv_text: str) -> dict[str, int]:
     """Parse NSE's fo_mktlots.csv into {SYMBOL: lot size for the nearest listed month}."""
     lots: dict[str, int] = {}
@@ -168,6 +186,8 @@ class NSEProvider(DataProvider):
         self._lock = threading.Lock()
         self._lot_sizes: dict[str, int] = {}
         self._lot_sizes_at = 0.0
+        self._sleep = time.sleep
+        self.last_ok: Optional[float] = None
         self._holidays: Optional[list[date]] = None
         self._holidays_day: Optional[date] = None
 
@@ -186,34 +206,65 @@ class NSEProvider(DataProvider):
         except requests.RequestException as exc:
             raise DataUnavailableError(f"Cannot reach nseindia.com: {exc}") from exc
 
-    def _get_json(self, path: str, params: Optional[dict] = None) -> Any:
+    def _get_json(self, path: str, params: Optional[dict] = None, attempts: int = 4) -> Any:
+        """GET an NSE JSON endpoint with the retries NSE's bot protection requires.
+
+        * 401/403 or an HTML page instead of JSON (Akamai block / expired cookies): refresh the
+          session cookies and retry.
+        * 429 and 5xx: back off exponentially with jitter (honouring Retry-After).
+        * Network errors: back off and retry.
+        * 404 and other client errors: fail immediately (the endpoint does not exist).
+        """
         with self._lock:
             if not self._warmed:
                 self._warm_up()
             s = self._get_session()
             last_error: Optional[Exception] = None
-            for attempt in range(2):
+            for attempt in range(attempts):
+                rewarm, retry_after = False, None
                 try:
                     resp = s.get(f"{BASE_URL}{path}", params=params, timeout=self._timeout)
                 except requests.RequestException as exc:
                     last_error = exc
                 else:
+                    ctype = (getattr(resp, "headers", {}) or {}).get("Content-Type", "")
                     if resp.status_code == 200:
                         try:
                             data = resp.json()
-                        except ValueError as exc:
-                            last_error = exc
+                        except ValueError:
+                            last_error = InvalidDataError(
+                                f"NSE returned a non-JSON page ({ctype or 'unknown type'}): likely blocked or cookies expired")
+                            rewarm = True
                         else:
                             if data:
+                                self.last_ok = time.time()
                                 return data
                             last_error = InvalidDataError("empty response")
-                    else:
+                            rewarm = True
+                    elif resp.status_code in (401, 403):
+                        last_error = DataUnavailableError(f"HTTP {resp.status_code} (access refused)")
+                        rewarm = True
+                    elif resp.status_code == 429 or resp.status_code >= 500:
                         last_error = DataUnavailableError(f"HTTP {resp.status_code}")
-                if attempt == 0:
-                    # Cookies expire quickly; refresh them and retry once.
-                    time.sleep(0.5)
+                        try:
+                            retry_after = float((getattr(resp, "headers", {}) or {}).get("Retry-After", ""))
+                        except ValueError:
+                            retry_after = None
+                    else:
+                        raise DataUnavailableError(f"NSE request {path} failed: HTTP {resp.status_code}")
+                if attempt == attempts - 1:
+                    break
+                delay = retry_after if retry_after is not None else min(8.0, 0.5 * 2 ** attempt)
+                self._sleep(delay + random.uniform(0, 0.3))
+                if rewarm:
                     self._warm_up()
-            raise DataUnavailableError(f"NSE request {path} failed: {last_error}")
+            raise DataUnavailableError(f"NSE request {path} failed after {attempts} attempts: {last_error}")
+
+    # -- futures -----------------------------------------------------------------------------
+    def get_futures(self, symbol: str) -> dict[date, float]:
+        """Exchange futures prices by expiry, from NSE's derivative quote."""
+        symbol = normalize_symbol(symbol)
+        return parse_futures_quote(self._get_json("/api/quote-derivative", {"symbol": symbol}, attempts=2))
 
     # -- API --------------------------------------------------------------------------------
     def _legacy_payload(self, symbol: str) -> dict:
@@ -277,6 +328,7 @@ class NSEProvider(DataProvider):
                 self._lot_sizes_at = time.time()
             except requests.RequestException as exc:
                 log.warning("Could not fetch NSE lot sizes: %s", exc)
+                self._lot_sizes_at = time.time() - 6 * 3600 + 300  # retry in 5 minutes, not every call
         return self._lot_sizes.get(normalize_symbol(symbol))
 
     # -- market session ---------------------------------------------------------------------

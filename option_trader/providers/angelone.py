@@ -69,9 +69,16 @@ class InstrumentMaster:
         self.options: dict[str, dict[date, dict[tuple[float, str], dict]]] = {}
         self.equity_tokens: dict[str, str] = {}
         self.lot_sizes: dict[str, int] = {}
+        self.futures: dict[str, dict[date, str]] = {}  # {underlying: {expiry: token}}
         for r in records:
             seg = r.get("exch_seg")
             itype = r.get("instrumenttype")
+            if seg == "NFO" and itype in ("FUTIDX", "FUTSTK"):
+                try:
+                    self.futures.setdefault(str(r.get("name", "")).upper(), {})[parse_angel_date(r["expiry"])] = str(r["token"])
+                except (KeyError, ValueError):
+                    pass
+                continue
             if seg == "NFO" and itype in ("OPTIDX", "OPTSTK"):
                 sym = str(r.get("symbol", ""))
                 opt = sym[-2:]
@@ -234,6 +241,20 @@ class AngelOneProvider(DataProvider):
         if not ltp:
             raise DataUnavailableError(f"Angel One returned no price for {name}")
         return ltp
+
+    def get_futures(self, symbol: str) -> dict[date, float]:
+        """Live futures prices by expiry from the NFO futures contracts."""
+        name = normalize_symbol(symbol)
+        toks = self.master().futures.get(name, {})
+        if not toks:
+            return {}
+        quotes = self._quotes("NFO", list(toks.values()))
+        out = {}
+        for exp, tok in toks.items():
+            ltp = _f((quotes.get(tok) or {}).get("ltp"))
+            if ltp:
+                out[exp] = ltp
+        return out
 
     def get_expiries(self, symbol: str) -> list[date]:
         name = normalize_symbol(symbol)

@@ -209,6 +209,7 @@ function renderChain(ch) {
   $("#chain-meta").innerHTML = `
     <span>Spot <b>${fmt(ch.spot)}</b>${dayMove(ch)}</span>
     <span>ATM <b>${fmt(ch.atm_strike, 0)}</b></span>
+    ${ch.futures_ltp ? `<span title="Exchange-traded futures price for this expiry">Futures <b>${fmt(ch.futures_ltp)}</b></span>` : ""}
     ${ch.forward ? `<span title="Futures-equivalent price implied by put-call parity; options are priced off this">Forward <b>${fmt(ch.forward)}</b> <span class="${signCls(ch.forward - ch.spot)}">(${ch.forward >= ch.spot ? "+" : ""}${fmt(ch.forward - ch.spot)})</span></span>` : ""}
     <span>Expiry <b>${esc(ch.expiry)}</b></span>
     <span>Lot size <b>${ch.lot_size ?? "–"}</b></span>
