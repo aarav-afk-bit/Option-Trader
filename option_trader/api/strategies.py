@@ -293,6 +293,10 @@ class DistributionIn(BaseModel):
     mode: str = "atm"  # atm | realised | implied | auto
     drift: float = Field(0.0, description="Expected move by expiry, e.g. 0.01 = +1%")
     vol_mult: float = 1.0
+    # Plain-language view (Quick trade): up | down | range | breakout | auto, and its strength in
+    # standard deviations of the move options are pricing (0.5 = a little, 1 = a lot).
+    view: Optional[str] = None
+    strength: float = 0.5
 
 
 class ScoreIn(AnalyzeIn):
@@ -300,8 +304,48 @@ class ScoreIn(AnalyzeIn):
     distribution: DistributionIn = DistributionIn()
 
 
+def apply_view(chain, d: DistributionIn) -> DistributionIn:
+    """Translate a plain-language view into the price model's drift / width."""
+    import math
+
+    from ..analytics.chain import atm_iv
+
+    if not d.view:
+        return d
+    view = d.view.lower()
+    if view == "auto":
+        return DistributionIn(mode="auto")
+    iv = atm_iv(chain) or 0.15
+    sd = iv * math.sqrt(max(chain.years_to_expiry(), 1e-6))
+    k = min(max(d.strength, 0.0), 2.0)
+    if view == "up":
+        return DistributionIn(mode="implied", drift=round(k * sd, 5))
+    if view == "down":
+        return DistributionIn(mode="implied", drift=round(-k * sd, 5))
+    if view == "range":
+        return DistributionIn(mode="implied", vol_mult=round(max(0.5, 1 - 0.4 * k), 3))
+    if view == "breakout":
+        return DistributionIn(mode="implied", vol_mult=round(1 + 0.5 * k, 3))
+    raise HTTPException(422, "view must be up, down, range, breakout or auto")
+
+
 def make_distribution(chain, manager: ProviderManager, d: DistributionIn):
     from ..optimizer.context import build_distribution
+
+    d = apply_view(chain, d)
+    if d.vol_mult != 1.0 and d.mode == "implied":
+        # Width views reshape the market-implied distribution around its centre.
+        from ..optimizer.distribution import Distribution
+        from ..optimizer.implied import implied_distribution, shift
+
+        try:
+            base = implied_distribution(chain, manager.risk_free_rate)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        f = base.mean()
+        wide = Distribution(f * (base.prices / f) ** d.vol_mult, base.probs, "implied",
+                            dict(base.params, vol_mult=d.vol_mult))
+        return shift(wide, d.drift)
 
     candles = None
     if d.mode == "auto":
