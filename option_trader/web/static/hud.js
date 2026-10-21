@@ -122,7 +122,7 @@
   $("#cmd-list").addEventListener("click", (e) => { const li = e.target.closest("li[data-i]"); if (li) { sel = Number(li.dataset.i); runSel(); } });
 
   function showHelp() {
-    App.showBanner("Shortcuts: 1–8 switch sections · / jump to symbol · R refresh · O optimise · T theme · [ ] side panels · Ctrl+K command palette · Esc close", "info");
+    App.showBanner("Shortcuts: 1–9 switch sections · / jump to symbol · R refresh · O optimise · T theme · [ ] side panels · Ctrl+K command palette · Esc close", "info");
   }
 
   /* ---------- keyboard shortcuts ---------- */

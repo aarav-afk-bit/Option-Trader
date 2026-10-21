@@ -477,3 +477,16 @@ html.fx-off td.flash-up, html.fx-off td.flash-down { animation-duration: .01s; }
 /* ---------- data quality ---------- */
 td.suspect { position: relative; color: var(--amber); }
 td.suspect::before { content: "⚠"; position: absolute; left: 4px; font-size: 10px; color: var(--amber); }
+
+/* ---------- settings ---------- */
+.settings-grid { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
+.settings-grid .card label:not(.inline) { margin-bottom: 8px; }
+.settings-grid input:not([type="checkbox"]) { width: 100%; }
+.settings-grid input.small { width: 90px; }
+.st-sources { margin: 6px 0 10px; padding-left: 20px; }
+.st-sources li { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; }
+.st-move button { padding: 1px 7px; font-size: 11px; }
+.st-results td { vertical-align: top; white-space: normal; }
+.st-advice { color: var(--amber); font-size: 13px; }
+.st-raw { color: var(--muted); font-size: 11.5px; word-break: break-word; }
+.st-advice { color: var(--text) !important; }

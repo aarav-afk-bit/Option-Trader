@@ -12,6 +12,68 @@ load_dotenv()
 
 VALID_PROVIDERS = ("nse", "angelone", "yahoo")
 
+# Settings saved from the in-app Settings page live in the data directory and take precedence
+# over .env (they are the most recent choice). Secrets go to a separate owner-only file.
+SETTINGS_FILE = "settings.env"
+CREDENTIALS_FILE = "credentials.env"
+EDITABLE_KEYS = {
+    "OPTION_TRADER_PROVIDERS", "OPTION_TRADER_RISK_FREE_RATE", "OPTION_TRADER_CACHE_TTL",
+    "OPTION_TRADER_STALE_SECONDS", "OPTION_TRADER_LIVE_TICKS", "OPTION_TRADER_BROKERAGE_PER_ORDER",
+    "OPTION_TRADER_STT_SELL", "OPTION_TRADER_EXCHANGE_TXN", "OPTION_TRADER_SEBI_FEE",
+    "OPTION_TRADER_STAMP_BUY", "OPTION_TRADER_GST",
+}
+SECRET_KEYS = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET"}
+
+
+def data_dir_from_env() -> Path:
+    return Path(os.getenv("OPTION_TRADER_DATA_DIR") or Path.home() / ".option_trader").expanduser()
+
+
+def load_saved_settings() -> None:
+    d = data_dir_from_env()
+    for name in (SETTINGS_FILE, CREDENTIALS_FILE):
+        if (d / name).exists():
+            load_dotenv(d / name, override=True)
+
+
+def _write_env(path: Path, values: dict, private: bool) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = {}
+    if path.exists():
+        from dotenv import dotenv_values
+
+        existing = {k: v for k, v in dotenv_values(path).items() if v is not None}
+    existing.update({k: str(v) for k, v in values.items()})
+    lines = [f'{k}="{v}"' for k, v in sorted(existing.items()) if v != ""]
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("\n".join(lines) + "\n")
+    if private:
+        os.chmod(tmp, 0o600)  # owner read/write only
+    os.replace(tmp, path)
+
+
+def save_settings(values: dict, secrets: dict) -> None:
+    """Persist settings from the Settings page and apply them to this process."""
+    global _settings
+    unknown = (set(values) - EDITABLE_KEYS) | (set(secrets) - SECRET_KEYS)
+    if unknown:
+        raise ValueError(f"Not editable: {sorted(unknown)}")
+    d = data_dir_from_env()
+    if values:
+        _write_env(d / SETTINGS_FILE, values, private=False)
+    if secrets:
+        _write_env(d / CREDENTIALS_FILE, secrets, private=True)
+    for k, v in {**values, **secrets}.items():
+        if v == "":
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = str(v)
+    _settings = None
+    Settings()  # validate now so a bad value fails the save, not the next request
+
+
+load_saved_settings()
+
 
 def _float_env(name: str, default: float) -> float:
     raw = os.getenv(name, "").strip()
