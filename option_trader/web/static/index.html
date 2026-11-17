@@ -201,7 +201,7 @@
   <section id="tab-signals" class="panel">
     <div class="row">
       <button id="load-signals" class="primary">Analyse now</button>
-      <label class="inline">Lots <input id="idea-lots" type="number" min="1" value="1" class="small"></label>
+      <label class="inline" title="Contracts per leg (each covers 100 shares)">Contracts <input id="idea-lots" type="number" min="1" value="1" class="small"></label>
     </div>
     <div id="events-out"></div>
     <div id="signals-out"><p class="muted">Press “Analyse now” to compute signals and trade ideas from the live chain and price history.</p></div>
@@ -215,7 +215,7 @@
           <label>Strategy <select id="tpl-select"></select></label>
           <p id="tpl-desc" class="muted"></p>
           <div class="row">
-            <label>Lots <input id="tpl-lots" type="number" min="1" value="1" class="small"></label>
+            <label title="Contracts per leg (each covers 100 shares)">Contracts <input id="tpl-lots" type="number" min="1" value="1" class="small"></label>
             <label title="Multiply the distance between strikes">Width <input id="tpl-width" type="number" min="1" value="1" class="small"></label>
             <label title="Move all strikes up/down by N strikes">ATM shift <input id="tpl-shift" type="number" value="0" class="small"></label>
             <label>Fill
@@ -234,7 +234,7 @@
         <div class="card">
           <h3>2. Edit legs</h3>
           <div class="table-wrap"><table class="legs">
-            <thead><tr><th>Side</th><th>Type</th><th>Expiry</th><th>Strike</th><th>Lots</th><th title="Leave blank to use the live price">Entry price</th><th>Live</th><th></th></tr></thead>
+            <thead><tr><th>Side</th><th>Type</th><th>Expiry</th><th>Strike</th><th>Contracts</th><th title="Leave blank to use the live price">Entry price</th><th>Live</th><th></th></tr></thead>
             <tbody id="legs-body"></tbody>
           </table></div>
           <div class="row">
@@ -250,9 +250,9 @@
             <div class="slider-ends"><span>Higher win rate</span><span>Higher profit</span></div>
             <input id="opt-goal" type="range" min="0" max="100" step="5" value="50"></label>
           <div class="row">
-            <label>Max loss (₹) <input id="opt-maxloss" type="number" min="0" step="500" placeholder="no limit" style="width:110px"></label>
+            <label>Max loss ($) <input id="opt-maxloss" type="number" min="0" step="500" placeholder="no limit" style="width:110px"></label>
             <label>Max legs <input id="opt-maxlegs" type="number" min="1" max="6" value="4" class="small"></label>
-            <label>Max lots/leg <input id="opt-maxlots" type="number" min="1" max="20" value="3" class="small"></label>
+            <label>Max contracts/leg <input id="opt-maxlots" type="number" min="1" max="20" value="3" class="small"></label>
           </div>
           <div class="row">
             <label>Price model
@@ -312,8 +312,8 @@
       <label>View
         <select id="sc-view"><option value="any">Any</option><option>bullish</option><option>bearish</option><option>neutral</option><option>volatile</option></select>
       </label>
-      <label>Lots <input id="sc-lots" type="number" min="1" value="1" class="small"></label>
-      <label>Max loss (₹) <input id="sc-maxloss" type="number" min="0" step="500" placeholder="any" class="small" style="width:100px"></label>
+      <label title="Contracts per leg">Contracts <input id="sc-lots" type="number" min="1" value="1" class="small"></label>
+      <label>Max loss ($) <input id="sc-maxloss" type="number" min="0" step="500" placeholder="any" class="small" style="width:100px"></label>
       <label>Min prob. of profit % <input id="sc-pop" type="number" min="0" max="100" value="0" class="small"></label>
       <label>Sort by
         <select id="sc-sort"><option value="score">Overall score</option><option value="pop">Prob. of profit</option>
@@ -426,7 +426,7 @@
         </select>
       </label>
       <label class="al-ltp hidden">Strike <input id="al-strike" type="number" step="any" class="small" style="width:100px"></label>
-      <label class="al-ltp hidden">Type <select id="al-type"><option>CE</option><option>PE</option></select></label>
+      <label class="al-ltp hidden">Type <select id="al-type"><option value="CE">Call</option><option value="PE">Put</option></select></label>
       <label>is
         <select id="al-op"><option value="above">above</option><option value="below">below</option></select>
       </label>
@@ -445,7 +445,7 @@
 <aside class="hud-panel neon-panel" id="hud-panel" aria-label="Live status">
   <div class="side-title"><span class="glyph">HUD</span><span class="slash">//</span><span class="glyph">LIVE</span>
     <button type="button" id="hud-collapse" class="icon-btn" title="Hide this panel (])">×</button></div>
-  <div class="hud-clock"><span id="hud-time">--:--:--</span><small>IST</small></div>
+  <div class="hud-clock"><span id="hud-time">--:--:--</span><small>ET</small></div>
   <div class="hud-grid">
     <div>Market</div><div id="hud-market">–</div>
     <div>Price feed</div><div id="hud-feed">–</div>
@@ -460,7 +460,7 @@
     <div>ATM IV</div><div id="hud-iv">–</div>
     <div>PCR (OI)</div><div id="hud-pcr">–</div>
     <div>Expiry</div><div id="hud-expiry">–</div>
-    <div>Lot size</div><div id="hud-lot">–</div>
+    <div>Multiplier</div><div id="hud-lot">–</div>
   </div>
   <div class="hud-sep"></div>
   <div class="hud-keys">
@@ -483,7 +483,7 @@
 
 <div id="cmd" class="cmd hidden" role="dialog" aria-modal="true" aria-label="Command palette">
   <div class="cmd-box neon-panel">
-    <input id="cmd-input" placeholder="Type a command or a symbol, e.g. “banknifty”, “optimise”, “charts”…" autocomplete="off">
+    <input id="cmd-input" placeholder="Type a command or a symbol, e.g. “spx”, “aapl”, “optimise”, “valuation”…" autocomplete="off">
     <ul id="cmd-list"></ul>
     <div class="muted cmd-hint">↑↓ to choose · Enter to run · Esc to close</div>
   </div>

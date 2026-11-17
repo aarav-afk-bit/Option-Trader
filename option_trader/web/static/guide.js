@@ -4,7 +4,7 @@
 
 (function () {
   const $ = (s) => document.querySelector(s);
-  const fmt = (v, d = 0) => (v == null ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const fmt = (v, d = 0) => (v == null ? "–" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
 
   /* ---------- glossary ---------- */
   const G = {
@@ -13,7 +13,7 @@
     "volume": "How many contracts traded today. High volume = easy to buy and sell at fair prices.",
     "iv": "Implied volatility: how much movement the option price is expecting, per year. Higher IV = more expensive options.",
     "atm iv": "Implied volatility of the at-the-money options: the market's single best estimate of how much the price will move.",
-    "delta": "Roughly the chance the option ends in profit, and how much its price moves when the underlying moves ₹1 (0.5 ≈ 50p per ₹1).",
+    "delta": "Roughly the chance the option ends in profit, and how much its price moves when the underlying moves $1 (0.5 ≈ 50¢ per $1, or $50 per contract).",
     "gamma": "How fast delta changes as the price moves. High gamma = the position changes character quickly near expiry.",
     "theta": "Time decay: how much value the option loses per day if nothing else changes. Sellers earn it, buyers pay it.",
     "vega": "How much the option price changes when implied volatility moves by 1 point.",
@@ -26,7 +26,8 @@
     "atm": "At the money: the strike closest to the current price.",
     "atm strike": "At the money: the strike closest to the current price.",
     "forward": "The futures-equivalent price the options are priced from (spot plus interest, minus dividends), worked out from live call and put prices.",
-    "lot size": "Number of units in one contract. Profits and losses are multiplied by this.",
+    "lot size": "Shares per contract (100 for US equity and index options). Prices are quoted per share, so a $2.50 option costs $250.",
+    "multiplier": "Shares per contract (100 for US equity and index options). Prices are quoted per share, so a $2.50 option costs $250.",
     "rate": "Risk-free interest rate for this option's life, read off the US Treasury yield curve. It slightly affects option prices (and the futures price).",
     "data age": "How long ago the exchange produced these prices. Green = fresh.",
     "pcr": "Put-call ratio of open interest. In the US, puts are mostly bought as hedges, so read it against the norm (~1.3 for indices and index ETFs, ~0.7 for stocks): far above = fear (contrarian bullish), far below = complacency (contrarian bearish).",
@@ -44,7 +45,7 @@
     "prob. of profit": "Estimated chance the strategy is profitable at expiry, from the market's own implied volatility.",
     "win rate": "Estimated chance the strategy ends in profit at expiry, after charges.",
     "expected p&l": "Average result over all the outcomes the price model considers likely, after charges. Positive = an edge.",
-    "score": "The optimiser's rating: a blend of win rate and expected return per rupee risked, set by your goal slider.",
+    "score": "The optimiser's rating: a blend of win rate and expected return per dollar risked, set by your goal slider.",
     "charges": "Commission plus the regulatory fees every US broker passes on: ORF and OCC clearing per contract, and FINRA TAF and the SEC fee on sales.",
     "spread slippage": "What crossing the bid/ask spread costs you on the way in and out, compared with the mid price.",
     "market": "Whether US options are trading right now (9:30 am–4:00 pm New York time, NYSE holidays and early closes included).",

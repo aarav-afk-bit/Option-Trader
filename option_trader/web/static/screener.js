@@ -5,7 +5,7 @@
   const { api } = window.App;
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
   let last = null;
 
   const legText = (l) => `${l.action === "BUY" ? "B" : "S"} ${l.lots}× ${l.option_type === "FUT" ? "FUT" : fmt(l.strike, l.strike % 1 ? 2 : 0) + l.option_type}`;

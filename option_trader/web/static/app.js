@@ -5,8 +5,8 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
-const fmtInt = (v) => (v === null || v === undefined ? "–" : Math.round(v).toLocaleString("en-IN"));
+const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
+const fmtInt = (v) => (v === null || v === undefined ? "–" : Math.round(v).toLocaleString("en-US"));
 const pct = (v, d = 1) => (v === null || v === undefined ? "–" : (v * 100).toFixed(d) + "%");
 const signCls = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
 
@@ -252,7 +252,7 @@ function renderChain(ch) {
     ${ch.futures_ltp ? `<span title="Exchange-traded futures price for this expiry">Futures <b>${fmt(ch.futures_ltp)}</b></span>` : ""}
     ${ch.forward ? `<span title="Futures-equivalent price implied by put-call parity; options are priced off this">Forward <b>${fmt(ch.forward)}</b> <span class="${signCls(ch.forward - ch.spot)}">(${ch.forward >= ch.spot ? "+" : ""}${fmt(ch.forward - ch.spot)})</span></span>` : ""}
     <span>Expiry <b>${esc(ch.expiry)}</b></span>
-    <span>Lot size <b>${ch.lot_size ?? "–"}</b></span>
+    <span title="Shares per contract">Multiplier <b>${ch.lot_size ?? "–"}</b></span>
     <span>Source <b>${esc(ch.source.toUpperCase())}</b></span>
     ${ch.live_at ? `<span class="pill bullish">Live tick ${esc(new Date(ch.live_at).toLocaleTimeString())}</span>` : ""}
     ${ageBadge(ch)}

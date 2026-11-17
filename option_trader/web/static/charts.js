@@ -48,7 +48,7 @@
     ax.yaxis.title = "ATM IV %"; ax.yaxis2.title = "1σ move";
     Plotly.react("ch-term", [
       { x, y: d.points.map((p) => (p.atm_iv != null ? p.atm_iv * 100 : null)), name: "ATM IV %", mode: "lines+markers", line: { color: c.s1, width: 2 }, marker: { size: 8 } },
-      { x, y: d.points.map((p) => p.one_sd_move), name: "1σ move (₹)", mode: "lines+markers", xaxis: "x", yaxis: "y2", line: { color: c.s3, width: 2 }, marker: { size: 8 } },
+      { x, y: d.points.map((p) => p.one_sd_move), name: "1σ move ($)", mode: "lines+markers", xaxis: "x", yaxis: "y2", line: { color: c.s3, width: 2 }, marker: { size: 8 } },
     ], App.plotLayout({ ...ax, margin: { l: 60, r: 20, t: 10, b: 60 }, xaxis: { anchor: "y2" } }), cfg);
   }
 
