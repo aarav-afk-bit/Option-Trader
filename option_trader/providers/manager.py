@@ -83,14 +83,25 @@ class ProviderManager:
         from .yahoo import YahooProvider
 
         settings = settings or get_settings()
+        from .tradier import TradierProvider
+
         factories = {
             "cboe": CboeProvider,
+            "tradier": lambda: TradierProvider.from_settings(settings),
             "nse": NSEProvider,
             "yahoo": YahooProvider,
             "angelone": lambda: AngelOneProvider(settings),
         }
         mgr = cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
                   risk_free_rate=settings.risk_free_rate, stale_seconds=settings.stale_seconds)
+        tradier = next((p for p in mgr.providers if p.name == "tradier" and p.is_configured()), None)
+        if tradier is None and settings.tradier_configured:
+            tradier = TradierProvider.from_settings(settings)
+        if tradier is not None and settings.live_ticks and not tradier.sandbox:
+            from ..live import TradierLiveHub
+
+            mgr.live = TradierLiveHub(tradier, risk_free_rate=settings.risk_free_rate)
+            return mgr
         angel = next((p for p in mgr.providers if p.name == "angelone" and p.is_configured()), None)
         if angel is None and settings.angel_configured:
             angel = AngelOneProvider(settings)  # stream ticks even if Angel isn't a snapshot source

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-VALID_PROVIDERS = ("cboe", "yahoo", "nse", "angelone")
+VALID_PROVIDERS = ("cboe", "tradier", "yahoo", "nse", "angelone")
 
 # Settings saved from the in-app Settings page live in the data directory and take precedence
 # over .env (they are the most recent choice). Secrets go to a separate owner-only file.
@@ -20,9 +20,9 @@ EDITABLE_KEYS = {
     "OPTION_TRADER_PROVIDERS", "OPTION_TRADER_RISK_FREE_RATE", "OPTION_TRADER_CACHE_TTL",
     "OPTION_TRADER_STALE_SECONDS", "OPTION_TRADER_LIVE_TICKS", "OPTION_TRADER_BROKERAGE_PER_ORDER",
     "OPTION_TRADER_STT_SELL", "OPTION_TRADER_EXCHANGE_TXN", "OPTION_TRADER_SEBI_FEE",
-    "OPTION_TRADER_STAMP_BUY", "OPTION_TRADER_GST",
+    "OPTION_TRADER_STAMP_BUY", "OPTION_TRADER_GST", "TRADIER_SANDBOX",
 }
-SECRET_KEYS = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET"}
+SECRET_KEYS = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET", "TRADIER_TOKEN"}
 
 
 def data_dir_from_env() -> Path:
@@ -86,7 +86,7 @@ def _float_env(name: str, default: float) -> float:
 
 
 def _providers_env() -> list[str]:
-    raw = os.getenv("OPTION_TRADER_PROVIDERS", "cboe,yahoo")
+    raw = os.getenv("OPTION_TRADER_PROVIDERS", "tradier,cboe,yahoo")
     providers = [p.strip().lower() for p in raw.split(",") if p.strip()]
     unknown = [p for p in providers if p not in VALID_PROVIDERS]
     if unknown:
@@ -106,10 +106,16 @@ class Settings:
     )
     stale_seconds: float = field(default_factory=lambda: _float_env("OPTION_TRADER_STALE_SECONDS", 180.0))
     live_ticks: bool = field(default_factory=lambda: os.getenv("OPTION_TRADER_LIVE_TICKS", "1") not in ("0", "false", "no"))
+    tradier_token: str = field(default_factory=lambda: os.getenv("TRADIER_TOKEN", ""))
+    tradier_sandbox: bool = field(default_factory=lambda: os.getenv("TRADIER_SANDBOX", "0") in ("1", "true", "yes"))
     angel_api_key: str = field(default_factory=lambda: os.getenv("ANGEL_API_KEY", ""))
     angel_client_code: str = field(default_factory=lambda: os.getenv("ANGEL_CLIENT_CODE", ""))
     angel_pin: str = field(default_factory=lambda: os.getenv("ANGEL_PIN", ""))
     angel_totp_secret: str = field(default_factory=lambda: os.getenv("ANGEL_TOTP_SECRET", ""))
+
+    @property
+    def tradier_configured(self) -> bool:
+        return bool(self.tradier_token)
 
     @property
     def angel_configured(self) -> bool:
