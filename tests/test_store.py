@@ -7,7 +7,7 @@ from option_trader.app import create_app
 from option_trader.strategy.store import StrategyStore, template_from_legs
 from option_trader.strategy.templates import StrategyTemplate, TemplateLeg
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 
 def tpl(name="My Spread"):
@@ -33,7 +33,7 @@ def test_no_overwrite_and_builtin_clash(tmp_path):
 
 
 def test_template_from_legs():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     t = template_from_legs("Hedge", ch, [
         {"option_type": "PE", "action": "BUY", "strike": 24900, "lots": 2},
         {"option_type": "CE", "action": "SELL", "strike": 25100},
@@ -46,16 +46,16 @@ def test_template_from_legs():
 
 def test_saved_strategy_api_roundtrip(tmp_path):
     store = StrategyStore(tmp_path / "s.json")
-    client = TestClient(create_app(manager_with(RecordedNSEProvider()), store))
+    client = TestClient(create_app(manager_with(RecordedProvider()), store))
     r = client.post("/api/strategy/saved/from-legs", json={
-        "name": "My Bull", "symbol": "NIFTY",
+        "name": "My Bull", "symbol": "NDX",
         "legs": [{"option_type": "CE", "action": "BUY", "strike": 25000},
                  {"option_type": "CE", "action": "SELL", "strike": 25100}]})
     assert r.status_code == 200, r.text
     assert r.json()["id"] == "my_bull"
     ids = [t["id"] for t in client.get("/api/strategy/templates").json()]
     assert "my_bull" in ids and "iron_condor" in ids
-    built = client.post("/api/strategy/templates/my_bull/build", json={"symbol": "NIFTY"}).json()
+    built = client.post("/api/strategy/templates/my_bull/build", json={"symbol": "NDX"}).json()
     assert [leg["strike"] for leg in built["strategy"]["legs"]] == [25000, 25100]
     r = client.post("/api/strategy/saved", json={"name": "Edited", "legs": [
         {"option_type": "PE", "action": "SELL", "offset": -1}]})

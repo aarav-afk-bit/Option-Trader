@@ -14,7 +14,7 @@ from option_trader.analytics.technicals import (
 )
 from option_trader.app import create_app
 
-from .helpers import RecordedNSEProvider, manager_with, trending_candles
+from .helpers import RecordedProvider, manager_with, trending_candles
 
 
 def test_rsi_extremes():
@@ -71,11 +71,11 @@ def test_volatility_view():
 
 
 def test_technicals_api():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider(trending_candles()))))
-    r = client.get("/api/analytics/technicals", params={"symbol": "NIFTY"})
+    client = TestClient(create_app(manager_with(RecordedProvider(trending_candles()))))
+    r = client.get("/api/analytics/technicals", params={"symbol": "NDX"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["volatility"]["iv"] is not None
     assert body["candles"] == 260
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    assert client.get("/api/analytics/technicals", params={"symbol": "NIFTY"}).status_code == 503
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    assert client.get("/api/analytics/technicals", params={"symbol": "NDX"}).status_code == 503

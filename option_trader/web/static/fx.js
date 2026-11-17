@@ -65,7 +65,7 @@
     step(60);
     try {
       const m = await App.api("/api/market");
-      write(`&gt; NSE session ......... ${String(m.state).toUpperCase()}${m.estimate ? " (est.)" : ""}`, m.open ? "ok" : "dim");
+      write(`&gt; US session .......... ${String(m.state).toUpperCase()}${m.estimate ? " (est.)" : ""}`, m.open ? "ok" : "dim");
     } catch (_) { /* market status optional */ }
     step(85);
     write("&gt; loading option chain…");

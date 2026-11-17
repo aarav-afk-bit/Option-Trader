@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from option_trader.app import create_app
 from option_trader.strategy.engine import Leg, Strategy, analyze, leg_from_chain
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 NOW = datetime(2026, 10, 14, 4, 0, tzinfo=timezone.utc)
 EXP = date(2026, 10, 27)
@@ -71,7 +71,7 @@ def test_iv_solved_from_premium_when_missing():
 
 
 def test_leg_from_real_chain():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     l1 = leg_from_chain(ch, "PE", "BUY", 25000)
     assert l1.premium == 128.0
     assert leg_from_chain(ch, "PE", "BUY", 25000, fill="market").premium == 128.5
@@ -81,19 +81,19 @@ def test_leg_from_real_chain():
 
 
 def test_analyze_api_prices_from_chain():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    body = {"symbol": "NIFTY", "legs": [
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    body = {"symbol": "NDX", "legs": [
         {"option_type": "CE", "action": "BUY", "strike": 25000},
         {"option_type": "CE", "action": "SELL", "strike": 25100},
     ]}
     r = client.post("/api/strategy/analyze", json=body)
     assert r.status_code == 200, r.text
     res = r.json()
-    assert res["strategy"]["lot_size"] == 75
+    assert res["strategy"]["lot_size"] == 100
     assert res["strategy"]["legs"][0]["premium"] == 145.0
-    assert res["max_loss"] == pytest.approx(-(145 - 92) * 75)
-    assert res["source"] == "nse"
-    bad = client.post("/api/strategy/analyze", json={"symbol": "NIFTY", "legs": [
+    assert res["max_loss"] == pytest.approx(-(145 - 92) * 100)
+    assert res["source"] == "cboe"
+    bad = client.post("/api/strategy/analyze", json={"symbol": "NDX", "legs": [
         {"option_type": "CE", "action": "BUY", "strike": 123}]})
     assert bad.status_code == 400
 
@@ -123,8 +123,8 @@ def test_overridden_entry_price_valued_at_market():
 
 
 def test_api_current_pnl_zero_for_live_entry():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    res = client.post("/api/strategy/analyze", json={"symbol": "NIFTY", "fill": "mid", "legs": [
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    res = client.post("/api/strategy/analyze", json={"symbol": "NDX", "fill": "mid", "legs": [
         {"option_type": "PE", "action": "BUY", "strike": 25000, "lots": 2}]}).json()
     assert res["current_pnl"] == pytest.approx(0, abs=1)
 

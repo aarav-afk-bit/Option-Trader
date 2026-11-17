@@ -32,18 +32,18 @@
   <div class="brand" data-text="OPTION//TRADER">Option<span class="slash">//</span>Trader</div>
   <form id="controls" class="controls" autocomplete="off">
     <label>Symbol
-      <input id="symbol" list="symbols" value="NIFTY" required>
+      <input id="symbol" list="symbols" value="SPY" required>
       <datalist id="symbols">
-        <option>NIFTY</option><option>BANKNIFTY</option><option>FINNIFTY</option>
-        <option>MIDCPNIFTY</option><option>RELIANCE</option><option>HDFCBANK</option>
-        <option>ICICIBANK</option><option>INFY</option><option>TCS</option><option>SBIN</option>
+        <option>SPY</option><option>QQQ</option><option>IWM</option><option>SPX</option><option>NDX</option>
+        <option>RUT</option><option>VIX</option><option>AAPL</option><option>MSFT</option><option>NVDA</option>
+        <option>TSLA</option><option>AMZN</option><option>META</option><option>GOOGL</option><option>AMD</option>
       </datalist>
     </label>
     <label>Expiry <select id="expiry"></select></label>
     <label>Source
       <select id="source">
-        <option value="">Auto</option><option value="nse">NSE</option>
-        <option value="angelone">Angel One</option><option value="yahoo">Yahoo</option>
+        <option value="">Auto</option><option value="tradier">Tradier</option>
+        <option value="cboe">Cboe</option><option value="yahoo">Yahoo</option>
       </select>
     </label>
     <button type="submit" class="primary">Load</button>
@@ -58,7 +58,7 @@
     <button id="fx-toggle" class="fx-toggle" type="button" title="Turn visual effects (animations, scanlines) on or off">FX</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="Switch light/dark theme">☀️</button>
     <span id="live-badge" class="pill bearish" title="Real-time exchange ticks">Snapshot</span>
-    <span id="market-badge" class="pill neutral" title="NSE trading session">market…</span>
+    <span id="market-badge" class="pill neutral" title="US options trading session (NYSE calendar)">market…</span>
     <span id="online-dot" class="dot"></span><span id="online-text">checking…</span>
   </div>
 </header>
@@ -155,7 +155,7 @@
 
   <section id="tab-watchlist" class="panel">
     <form id="wl-form" class="row" autocomplete="off">
-      <label>Add symbol <input id="wl-add" list="symbols" placeholder="e.g. RELIANCE"></label>
+      <label>Add symbol <input id="wl-add" list="symbols" placeholder="e.g. AAPL"></label>
       <button type="submit">Add</button>
       <button type="button" id="wl-refresh" class="primary">Refresh</button>
       <span id="wl-status" class="muted"></span>
@@ -325,26 +325,24 @@
     <div class="cards settings-grid">
       <div class="card">
         <h3>1. Check your connections</h3>
-        <p class="muted">Tests the internet, NSE, Angel One and Yahoo Finance from this computer and tells you how to fix anything that fails.</p>
+        <p class="muted">Tests the internet, Cboe, Tradier and Yahoo Finance from this computer and tells you how to fix anything that fails.</p>
         <div class="row"><button id="st-test" class="primary" type="button">Test connections</button></div>
         <div id="st-test-out"></div>
       </div>
       <div class="card">
-        <h3>2. Angel One (for live tick-by-tick prices)</h3>
-        <p class="muted">Optional. Create a free SmartAPI app at smartapi.angelbroking.com and enable TOTP. Details are saved only on this computer in a private file; leave a field blank to keep what is saved.</p>
-        <div id="st-angel-status" class="muted"></div>
-        <label>API key <input id="st-api-key" autocomplete="off" spellcheck="false"></label>
-        <label>Client code <input id="st-client" autocomplete="off" spellcheck="false"></label>
-        <label>PIN <input id="st-pin" type="password" autocomplete="new-password"></label>
-        <label>TOTP secret <input id="st-totp" type="password" autocomplete="off" placeholder="the text code shown when you enabled TOTP"></label>
-        <div class="row"><button id="st-angel-save" class="primary" type="button">Save Angel One details</button>
-          <button id="st-angel-clear" class="danger" type="button">Remove</button></div>
+        <h3>2. Tradier (for real-time, tick-by-tick prices)</h3>
+        <p class="muted">Optional. Without it the app uses Cboe's free quotes (about 15 minutes delayed). A Tradier brokerage account gives a free real-time API token (Tradier dashboard → API Access). A developer sandbox token works too, but is delayed. Saved only on this computer in a private file.</p>
+        <div id="st-tradier-status" class="muted"></div>
+        <label>API token <input id="st-token" type="password" autocomplete="off" spellcheck="false" placeholder="leave blank to keep the saved token"></label>
+        <label class="inline"><input type="checkbox" id="st-sandbox"> This is a sandbox (developer) token</label>
+        <div class="row"><button id="st-tradier-save" class="primary" type="button">Save Tradier token</button>
+          <button id="st-tradier-clear" class="danger" type="button">Remove</button></div>
       </div>
       <div class="card">
         <h3>3. Data sources</h3>
         <p class="muted">The app tries these in order and uses the first that answers with fresh data.</p>
         <ol id="st-sources" class="st-sources"></ol>
-        <label class="inline"><input type="checkbox" id="st-live"> Stream live ticks from Angel One when available</label>
+        <label class="inline"><input type="checkbox" id="st-live"> Stream real-time ticks from Tradier when available</label>
         <div class="row">
           <label>Refresh cache (s) <input id="st-ttl" type="number" min="1" max="600" class="small"></label>
           <label>Stale after (s) <input id="st-stale" type="number" min="10" max="3600" class="small"></label>
@@ -441,7 +439,7 @@
 <div id="toasts" class="toasts"></div>
 
 <footer class="foot">
-  Live data from NSE, Angel One SmartAPI or Yahoo Finance. Not investment advice.
+  US options data from Tradier, Cboe or Yahoo Finance. Not investment advice.
 </footer>
 
 <script src="/static/vendor/plotly-2.35.2.min.js"></script>

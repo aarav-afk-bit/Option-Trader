@@ -3,10 +3,10 @@ from fastapi.testclient import TestClient
 from option_trader.app import create_app
 from option_trader.verify import compare
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 
-class Angel(RecordedNSEProvider):
+class Angel(RecordedProvider):
     name = "angelone"
 
     def __init__(self, bump=0.0, bump_strike=None):
@@ -27,7 +27,7 @@ class Angel(RecordedNSEProvider):
 
 
 def chains(bump=0.0, strike=None):
-    return RecordedNSEProvider().get_option_chain("NIFTY"), Angel(bump, strike).get_option_chain("NIFTY")
+    return RecordedProvider().get_option_chain("NDX"), Angel(bump, strike).get_option_chain("NDX")
 
 
 def test_identical_sources_agree():
@@ -50,9 +50,9 @@ def test_disagreement_is_reported_and_marked():
 
 
 def test_verify_endpoint():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider(), Angel(12.0, 25000.0))))
-    d = client.get("/api/verify", params={"symbol": "NIFTY"}).json()
+    client = TestClient(create_app(manager_with(RecordedProvider(), Angel(12.0, 25000.0))))
+    d = client.get("/api/verify", params={"symbol": "NDX"}).json()
     assert d["available"] and d["secondary"] == "angelone" and d["confidence"] == "low"
-    assert client.get("/api/chain", params={"symbol": "NIFTY"}).json()["verification"]["confidence"] == "low"
-    solo = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    assert solo.get("/api/verify", params={"symbol": "NIFTY"}).json()["available"] is False
+    assert client.get("/api/chain", params={"symbol": "NDX"}).json()["verification"]["confidence"] == "low"
+    solo = TestClient(create_app(manager_with(RecordedProvider())))
+    assert solo.get("/api/verify", params={"symbol": "NDX"}).json()["available"] is False

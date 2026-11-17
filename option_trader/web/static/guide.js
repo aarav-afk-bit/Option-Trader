@@ -46,8 +46,8 @@
     "score": "The optimiser's rating: a blend of win rate and expected return per rupee risked, set by your goal slider.",
     "charges": "Brokerage, STT, exchange fees, SEBI fee, stamp duty and GST for the trade.",
     "spread slippage": "What crossing the bid/ask spread costs you on the way in and out, compared with the mid price.",
-    "market": "Whether NSE is trading right now.",
-    "price feed": "LIVE = prices stream tick by tick from Angel One. Snapshot = prices refresh every few seconds from NSE.",
+    "market": "Whether US options are trading right now (9:30 am–4:00 pm New York time, NYSE holidays and early closes included).",
+    "price feed": "LIVE = prices stream tick by tick from Tradier. Snapshot = prices refresh every few seconds (Cboe quotes are about 15 minutes delayed).",
     "position greeks": "How the whole strategy reacts to price (delta), acceleration (gamma), time (theta) and volatility (vega).",
     "p&l now (model)": "What the position would be worth if you closed it right now at current prices.",
   };
@@ -124,7 +124,7 @@
 
   /* ---------- guided tour ---------- */
   const STEPS = [
-    ["#controls", "Pick what to look at", "Type a symbol like NIFTY or RELIANCE, choose an expiry and press Load. Prices come live from NSE, Angel One or Yahoo."],
+    ["#controls", "Pick what to look at", "Type a symbol like SPY, SPX or AAPL, choose an expiry and press Load. Prices come from Tradier (real-time), Cboe or Yahoo."],
     [".sidebar", "Move between sections", "The option chain, charts, buy/sell ideas, the strategy builder and more. Keys 1–8 jump straight there."],
     ["#chain-table", "The option chain", "Calls on the left, puts on the right, strikes in the middle. Click any LTP to add that option to a strategy."],
     ["#chain-summary", "What it means", "A one-line plain-English reading of the chain. Hover any underlined term for an explanation."],

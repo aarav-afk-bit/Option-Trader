@@ -4,7 +4,7 @@ from option_trader.analytics.recommender import PLAYBOOK, market_view, recommend
 from option_trader.app import create_app
 from option_trader.strategy.templates import BUILTIN_BY_ID
 
-from .helpers import RecordedNSEProvider, manager_with, trending_candles
+from .helpers import RecordedProvider, manager_with, trending_candles
 
 
 def sig(score, strength=0.5):
@@ -32,9 +32,9 @@ def test_squeeze_flags_volatile():
 
 
 def test_recommend_on_recorded_chain():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     out = recommend(ch, trending_candles(drift=-0.004), 0.065)
-    assert out["source"] == "nse"
+    assert out["source"] == "cboe"
     assert out["view"]["direction"] in ("bearish", "neutral", "bullish", "volatile")
     assert out["ideas"], out
     for idea in out["ideas"]:
@@ -47,14 +47,14 @@ def test_recommend_on_recorded_chain():
 
 
 def test_recommend_without_history():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     out = recommend(ch, None, 0.065)
     assert out["technicals"] is None and out["notes"]
 
 
 def test_recommendations_api():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider(trending_candles()))))
-    r = client.get("/api/analytics/recommendations", params={"symbol": "NIFTY", "lots": 2})
+    client = TestClient(create_app(manager_with(RecordedProvider(trending_candles()))))
+    r = client.get("/api/analytics/recommendations", params={"symbol": "NDX", "lots": 2})
     assert r.status_code == 200, r.text
     ideas = r.json()["ideas"]
     assert ideas and all(leg["lots"] % 2 == 0 for i in ideas for leg in i["legs"])

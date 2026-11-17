@@ -54,3 +54,29 @@ def test_us_chain_defaults_to_usd_and_4pm_eastern_expiry():
                      "cboe", datetime(2026, 10, 15, tzinfo=ET))
     assert ch.currency == "USD"
     assert ch.expiry_datetime() == et(2026, 10, 16, 16, 0)
+
+
+def test_market_endpoint_uses_nyse_calendar():
+    from fastapi.testclient import TestClient
+
+    from option_trader.app import create_app
+
+    from .helpers import RecordedProvider, manager_with
+
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    m = client.get("/api/market").json()
+    assert m["estimate"] is False and m["source"] == "nyse-calendar"
+    assert m["open"] is True  # tests run on Thu 2026-10-15 10:00 ET
+
+
+def test_stream_endpoint_explains_how_to_get_live_ticks():
+    from fastapi.testclient import TestClient
+
+    from option_trader.app import create_app
+
+    from .helpers import RecordedProvider, manager_with
+
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    with client.stream("GET", "/api/stream", params={"symbol": "NDX"}) as r:
+        body = "".join(r.iter_text())
+    assert '"live": false' in body and "Tradier" in body

@@ -12,7 +12,7 @@ def clean_chain(r=0.065):
     """Arbitrage-free chain from Black-Scholes with tight books (test-only data)."""
     now = datetime.now(timezone.utc)
     exp = (now + timedelta(days=20)).date()
-    ch = OptionChain("NIFTY", exp, 25000.0, [], "test", now, lot_size=75)
+    ch = OptionChain("NDX", exp, 25000.0, [], "test", now, lot_size=75)
     t = ch.years_to_expiry(now)
     rows = []
     for k in range(24000, 26050, 100):
@@ -80,7 +80,7 @@ def test_iv_outlier_and_parity():
 
 def test_manager_attaches_report_and_optimiser_skips_suspects():
     class P(DataProvider):
-        name = "nse"
+        name = "cboe"
 
         def get_expiries(self, symbol):
             return [clean_chain().expiry]
@@ -91,7 +91,7 @@ def test_manager_attaches_report_and_optimiser_skips_suspects():
             q.ltp, q.bid, q.ask = 300.0, None, None
             return ch
 
-    ch = manager_with(P()).get_chain("NIFTY")
+    ch = manager_with(P()).get_chain("NDX")
     assert ch.quality["suspect"] >= 1 and ch.to_dict()["quality"]["score"] < 100
     from option_trader.optimizer.distribution import lognormal
     from option_trader.optimizer.objective import Preferences

@@ -8,19 +8,6 @@ from typing import Optional
 
 from ..models import Candle, OptionChain
 
-# Common index aliases, normalised to the NSE symbol.
-INDEX_ALIASES = {
-    "NIFTY": "NIFTY",
-    "NIFTY50": "NIFTY",
-    "NIFTY 50": "NIFTY",
-    "BANKNIFTY": "BANKNIFTY",
-    "NIFTYBANK": "BANKNIFTY",
-    "FINNIFTY": "FINNIFTY",
-    "MIDCPNIFTY": "MIDCPNIFTY",
-    "NIFTYNXT50": "NIFTYNXT50",
-}
-NSE_INDICES = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50"}
-
 # US cash-settled, European-style index options (the rest are American-style equity/ETF options).
 US_INDEX_ALIASES = {
     "SPX": "SPX", "$SPX": "SPX", "^SPX": "SPX", "^GSPC": "SPX", "SPXW": "SPX", ".SPX": "SPX",
@@ -37,7 +24,7 @@ def normalize_symbol(symbol: str) -> str:
     s = symbol.strip().upper().replace("/", ".")
     if s.startswith("US:"):
         s = s[3:].strip()
-    return US_INDEX_ALIASES.get(s) or INDEX_ALIASES.get(s, s)
+    return US_INDEX_ALIASES.get(s, s)
 
 
 def is_us_index(symbol: str) -> bool:
@@ -48,9 +35,6 @@ def exercise_style(symbol: str) -> str:
     """US index options are European; equity and ETF options are American."""
     return "european" if is_us_index(symbol) else "american"
 
-
-def is_index(symbol: str) -> bool:
-    return normalize_symbol(symbol) in NSE_INDICES
 
 
 class DataProvider(ABC):

@@ -10,7 +10,7 @@ from .test_opt_search import smile_chain
 
 
 class Synth(DataProvider):
-    name = "nse"
+    name = "cboe"
 
     def get_expiries(self, symbol):
         return [smile_chain()[0].expiry]

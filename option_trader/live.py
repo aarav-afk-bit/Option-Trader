@@ -1,10 +1,10 @@
 """Overlay real-time exchange ticks on option chain snapshots.
 
-When Angel One credentials are configured, every chain the app serves (whether its snapshot
-came from NSE, Angel or Yahoo) is mapped onto Angel's NFO contract tokens and subscribed on
-the SmartAPI WebSocket. The latest traded price, best bid/ask, volume and open interest from
-those ticks replace the snapshot values, and IV/Greeks are recomputed from the new prices.
-Without credentials the app keeps polling snapshots and says so in the UI.
+With a Tradier production token, every chain the app serves (whether its snapshot came from
+Tradier, Cboe or Yahoo) is subscribed on Tradier's market-events WebSocket by OCC symbol. The
+latest trade, bid/ask and sizes from those events replace the snapshot values, and IV/Greeks
+are recomputed from the new prices. Without a token the app keeps polling snapshots and says
+so in the UI.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from typing import Optional
 
 from .models import OptionChain
 from .pricing import enrich_chain
-from .providers.angel_stream import EXCHANGE_NSE_CM, EXCHANGE_NSE_FO, AngelTickStream
 
 log = logging.getLogger(__name__)
 
@@ -97,67 +96,6 @@ class TradierLiveHub:
             self.stream.subscribe([chain.symbol, *tokens.values()])
             self._subscribed.add(key)
         return overlay(chain, {"tokens": tokens, "spot": chain.symbol}, self.stream.tick, self.r, "Tradier's real-time feed")
-
-    def status(self) -> dict:
-        s = self.stream.status()
-        s["error"] = self.last_error or s.get("last_error")
-        return s
-
-
-class LiveHub:
-    def __init__(self, angel, stream: Optional[AngelTickStream] = None, risk_free_rate: float = 0.065):
-        from .providers.angelone import stream_credentials
-
-        self.angel = angel
-        self.stream = stream or AngelTickStream(lambda: stream_credentials(angel))
-        self.r = risk_free_rate
-        self._maps: dict[tuple, dict] = {}
-        self._lock = threading.Lock()
-        self.last_error: Optional[str] = None
-
-    @property
-    def version(self) -> int:
-        return self.stream.version
-
-    def _mapping(self, chain: OptionChain) -> Optional[dict]:
-        from .providers.angelone import INDEX_TOKENS
-
-        key = (chain.symbol, chain.expiry)
-        with self._lock:
-            if key in self._maps:
-                return self._maps[key]
-        try:
-            master = self.angel.master()
-        except Exception as exc:
-            self.last_error = f"Angel instrument list unavailable: {exc}"
-            return None
-        contracts = master.contracts(chain.symbol, chain.expiry)
-        if not contracts:
-            self.last_error = f"No Angel One contracts for {chain.symbol} {chain.expiry}"
-            return None
-        tokens = {}
-        for r in chain.rows:
-            for opt in ("CE", "PE"):
-                rec = contracts.get((r.strike, opt))
-                if rec:
-                    tokens[(r.strike, opt)] = str(rec["token"])
-        spot_token = INDEX_TOKENS.get(chain.symbol) or master.equity_tokens.get(chain.symbol)
-        m = {"tokens": tokens, "spot": spot_token}
-        with self._lock:
-            self._maps[key] = m
-        self.stream.subscribe(EXCHANGE_NSE_FO, list(tokens.values()))
-        if spot_token:
-            self.stream.subscribe(EXCHANGE_NSE_CM, [spot_token])
-        return m
-
-    def apply(self, chain: OptionChain) -> int:
-        """Overwrite snapshot prices with the latest ticks. Returns how many quotes changed."""
-        if chain.currency != "INR":
-            return 0
-        m = self._mapping(chain)
-        if not m:
-            return 0
-        return overlay(chain, m, self.stream.tick, self.r, "Angel One's exchange feed")
 
     def status(self) -> dict:
         s = self.stream.status()

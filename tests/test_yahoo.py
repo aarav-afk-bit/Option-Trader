@@ -9,11 +9,9 @@ from option_trader.providers.yahoo import YahooProvider, yahoo_symbol
 
 
 def test_symbol_mapping():
-    assert yahoo_symbol("nifty") == "^NSEI"
-    assert yahoo_symbol("BANKNIFTY") == "^NSEBANK"
-    assert yahoo_symbol("reliance") == "RELIANCE.NS"
-    assert yahoo_symbol("US:aapl") == "AAPL"
-    assert yahoo_symbol("TCS.BO") == "TCS.BO"
+    assert yahoo_symbol("spx") == "^SPX" and yahoo_symbol("$NDX") == "^NDX" and yahoo_symbol("vix") == "^VIX"
+    assert yahoo_symbol("aapl") == "AAPL" and yahoo_symbol("US:msft") == "MSFT"
+    assert yahoo_symbol("BRK.B") == "BRK-B" and yahoo_symbol("^GSPC") == "^GSPC"
 
 
 class FakeTicker:
@@ -55,7 +53,7 @@ class FakeTicker:
 
 def test_option_chain_parsing():
     p = YahooProvider(ticker_factory=lambda s: FakeTicker())
-    ch = p.get_option_chain("US:AAPL", date(2026, 10, 16))
+    ch = p.get_option_chain("AAPL", date(2026, 10, 16))
     assert ch.source == "yahoo" and ch.symbol == "AAPL"
     assert ch.spot == 231.5
     assert ch.strikes == [230.0, 235.0]
@@ -75,5 +73,5 @@ def test_no_options_raises():
 
 def test_history_skips_nan_rows():
     p = YahooProvider(ticker_factory=lambda s: FakeTicker())
-    candles = p.get_history("NIFTY")
+    candles = p.get_history("NDX")
     assert len(candles) == 2 and candles[-1].close == 2.5

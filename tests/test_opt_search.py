@@ -10,7 +10,7 @@ from option_trader.optimizer.objective import Preferences
 from option_trader.optimizer.search import Optimizer, normalize
 from option_trader.pricing import bs_price
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 
 def smile_chain(rich_calls=True):
@@ -83,11 +83,11 @@ def test_invalid_start_moves_to_valid_neighbour():
 
 
 def test_optimize_endpoint():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    r = client.post("/api/strategy/optimize", json={"symbol": "NIFTY", "legs": [
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    r = client.post("/api/strategy/optimize", json={"symbol": "NDX", "legs": [
         {"option_type": "CE", "action": "BUY", "strike": 25000}], "prefs": {"win_weight": 0.6}})
     assert r.status_code == 200, r.text
     d = r.json()
     assert d["start"]["score"] is not None and d["best"]["score"] >= d["start"]["score"]
-    assert d["evaluated"] > 0 and d["source"] == "nse"
-    assert client.post("/api/strategy/optimize", json={"symbol": "NIFTY", "legs": [], "search": "local"}).status_code == 400
+    assert d["evaluated"] > 0 and d["source"] == "cboe"
+    assert client.post("/api/strategy/optimize", json={"symbol": "NDX", "legs": [], "search": "local"}).status_code == 400

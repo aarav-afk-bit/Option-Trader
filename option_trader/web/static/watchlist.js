@@ -16,7 +16,7 @@
       const v = JSON.parse(localStorage.getItem(KEY) || "null");
       if (Array.isArray(v) && v.length) return v;
     } catch (_) { /* ignore */ }
-    return ["NIFTY", "BANKNIFTY", "FINNIFTY"];
+    return ["SPY", "QQQ", "SPX", "AAPL", "NVDA", "TSLA"];
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(symbols)); } catch (_) { /* ignore */ } }
 

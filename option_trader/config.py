@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-VALID_PROVIDERS = ("cboe", "tradier", "yahoo", "nse", "angelone")
+VALID_PROVIDERS = ("tradier", "cboe", "yahoo")
 
 # Settings saved from the in-app Settings page live in the data directory and take precedence
 # over .env (they are the most recent choice). Secrets go to a separate owner-only file.
@@ -22,7 +22,7 @@ EDITABLE_KEYS = {
     "OPTION_TRADER_STT_SELL", "OPTION_TRADER_EXCHANGE_TXN", "OPTION_TRADER_SEBI_FEE",
     "OPTION_TRADER_STAMP_BUY", "OPTION_TRADER_GST", "TRADIER_SANDBOX",
 }
-SECRET_KEYS = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PIN", "ANGEL_TOTP_SECRET", "TRADIER_TOKEN"}
+SECRET_KEYS = {"TRADIER_TOKEN"}
 
 
 def data_dir_from_env() -> Path:
@@ -97,7 +97,7 @@ def _providers_env() -> list[str]:
 @dataclass
 class Settings:
     providers: list[str] = field(default_factory=_providers_env)
-    risk_free_rate: float = field(default_factory=lambda: _float_env("OPTION_TRADER_RISK_FREE_RATE", 0.065))
+    risk_free_rate: float = field(default_factory=lambda: _float_env("OPTION_TRADER_RISK_FREE_RATE", 0.04))
     cache_ttl: float = field(default_factory=lambda: _float_env("OPTION_TRADER_CACHE_TTL", 30.0))
     data_dir: Path = field(
         default_factory=lambda: Path(
@@ -108,18 +108,11 @@ class Settings:
     live_ticks: bool = field(default_factory=lambda: os.getenv("OPTION_TRADER_LIVE_TICKS", "1") not in ("0", "false", "no"))
     tradier_token: str = field(default_factory=lambda: os.getenv("TRADIER_TOKEN", ""))
     tradier_sandbox: bool = field(default_factory=lambda: os.getenv("TRADIER_SANDBOX", "0") in ("1", "true", "yes"))
-    angel_api_key: str = field(default_factory=lambda: os.getenv("ANGEL_API_KEY", ""))
-    angel_client_code: str = field(default_factory=lambda: os.getenv("ANGEL_CLIENT_CODE", ""))
-    angel_pin: str = field(default_factory=lambda: os.getenv("ANGEL_PIN", ""))
-    angel_totp_secret: str = field(default_factory=lambda: os.getenv("ANGEL_TOTP_SECRET", ""))
 
     @property
     def tradier_configured(self) -> bool:
         return bool(self.tradier_token)
 
-    @property
-    def angel_configured(self) -> bool:
-        return all((self.angel_api_key, self.angel_client_code, self.angel_pin, self.angel_totp_secret))
 
 
 _settings: Settings | None = None

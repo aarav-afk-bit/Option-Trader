@@ -16,19 +16,14 @@ from .errors import InvalidDataError
 
 OptionType = Literal["CE", "PE"]
 
-IST = timezone(timedelta(hours=5, minutes=30))
-NSE_EXPIRY_TIME = time(15, 30)
 ET = ZoneInfo("America/New_York")
 US_EXPIRY_TIME = time(16, 0)  # US equity/ETF options and PM-settled index options
 US_AM_SETTLE_TIME = time(9, 30)  # AM-settled index options (e.g. SPX monthlies) settle at the open
 CONTRACT_MULTIPLIER = 100  # standard US equity/index option multiplier
-INDIAN_SOURCES = ("nse", "angelone")
 
 
 def default_expiry_at(expiry: date, source: str = "") -> datetime:
     """When an expiry date's contracts stop trading: 16:00 New York for US options."""
-    if source in INDIAN_SOURCES:
-        return datetime.combine(expiry, NSE_EXPIRY_TIME, tzinfo=IST)
     return datetime.combine(expiry, US_EXPIRY_TIME, tzinfo=ET)
 
 
@@ -125,7 +120,7 @@ class OptionChain:
     expiries: list[date] = field(default_factory=list)
     currency: str = "USD"
     notes: list[str] = field(default_factory=list)
-    # Exact expiry moment when it differs from NSE's 15:30 IST close (e.g. US options).
+    # Exact moment trading stops (16:00 ET by default; 9:30 ET for AM-settled index options).
     expiry_at: Optional[datetime] = None
     # Set when streamed exchange ticks have been applied on top of the snapshot.
     live_at: Optional[str] = None
@@ -180,10 +175,10 @@ class OptionChain:
         return default_expiry_at(self.expiry, self.source)
 
     def exchange_time(self) -> Optional[datetime]:
-        """Exchange timestamp of the snapshot (e.g. NSE's '14-Oct-2026 15:30:00', IST)."""
+        """Exchange timestamp of the snapshot (e.g. Cboe's '2026-10-15 10:00:02', New York time)."""
         if not self.exchange_timestamp:
             return None
-        tz = IST if self.source in INDIAN_SOURCES else ET
+        tz = ET
         for fmt in ("%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
             try:
                 return datetime.strptime(self.exchange_timestamp.strip(), fmt).replace(tzinfo=tz)

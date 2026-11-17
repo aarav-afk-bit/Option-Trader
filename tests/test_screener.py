@@ -4,11 +4,11 @@ from option_trader.app import create_app
 from option_trader.strategy.screener import screen
 from option_trader.strategy.templates import BUILTIN_TEMPLATES
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 
 def chain():
-    return RecordedNSEProvider().get_option_chain("NIFTY")
+    return RecordedProvider().get_option_chain("NDX")
 
 
 def test_screen_filters_and_sorts():
@@ -22,17 +22,17 @@ def test_screen_filters_and_sorts():
 
 def test_screen_view_and_max_loss():
     ch = chain()
-    out = screen(ch, BUILTIN_TEMPLATES, 0.065, view="bullish", max_loss=12000)
+    out = screen(ch, BUILTIN_TEMPLATES, 0.065, view="bullish", max_loss=16000)
     assert out["results"]
     for r in out["results"]:
         assert r["view"] in ("bullish", "any")
-        assert r["max_loss"] is not None and -r["max_loss"] <= 12000
+        assert r["max_loss"] is not None and -r["max_loss"] <= 16000
 
 
 def test_screen_api():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    r = client.post("/api/strategy/screen", json={"symbol": "NIFTY", "allow_unlimited_loss": True, "sort": "credit"})
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    r = client.post("/api/strategy/screen", json={"symbol": "NDX", "allow_unlimited_loss": True, "sort": "credit"})
     assert r.status_code == 200, r.text
     d = r.json()
     credits = [x["net_premium"] for x in d["results"]]
-    assert credits == sorted(credits, reverse=True) and d["source"] == "nse"
+    assert credits == sorted(credits, reverse=True) and d["source"] == "cboe"
