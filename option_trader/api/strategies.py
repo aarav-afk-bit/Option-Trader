@@ -99,7 +99,7 @@ def analyze_endpoint(body: AnalyzeIn, manager: ProviderManager = Depends(get_man
         raise HTTPException(503, str(exc)) from exc
     now = datetime.now(timezone.utc)
     target = now + timedelta(days=body.target_days) if body.target_days is not None else None
-    result = analyze(strategy, chain.spot, manager.risk_free_rate, now=now, target=target,
+    result = analyze(strategy, chain.spot, (chain.rate or manager.risk_free_rate), now=now, target=target,
                      iv_shift=body.iv_shift, range_pct=body.range_pct, q=chain.carry)
     result["source"] = chain.source
     result["symbol"] = chain.symbol
@@ -156,7 +156,7 @@ def build_from_template(template: StrategyTemplate, body: BuildIn, manager: Prov
         raise HTTPException(422, str(exc)) from exc
     now = datetime.now(timezone.utc)
     target = now + timedelta(days=body.target_days) if body.target_days is not None else None
-    result = analyze(strategy, chain.spot, manager.risk_free_rate, now=now, target=target,
+    result = analyze(strategy, chain.spot, (chain.rate or manager.risk_free_rate), now=now, target=target,
                      iv_shift=body.iv_shift, range_pct=body.range_pct, q=chain.carry)
     result.update(source=chain.source, symbol=chain.symbol, template=template.to_dict(),
                   chain_fetched_at=chain.fetched_at.isoformat())
@@ -281,7 +281,7 @@ def screen_strategies(body: ScreenIn, request: Request,
         except DataUnavailableError as exc:
             raise ResolveError(str(exc)) from exc
 
-    out = screen(chain, all_templates(request.app), manager.risk_free_rate, body.view, max(body.lots, 1),
+    out = screen(chain, all_templates(request.app), (chain.rate or manager.risk_free_rate), body.view, max(body.lots, 1),
                  body.max_loss, body.min_pop, body.allow_unlimited_loss, body.sort,
                  chain_for_offset=later_chain, top=max(1, min(body.top, 100)))
     out.update(symbol=chain.symbol, expiry=chain.expiry.isoformat(), spot=chain.spot, source=chain.source,
@@ -339,7 +339,7 @@ def make_distribution(chain, manager: ProviderManager, d: DistributionIn):
         from ..optimizer.implied import implied_distribution, shift
 
         try:
-            base = implied_distribution(chain, manager.risk_free_rate)
+            base = implied_distribution(chain, (chain.rate or manager.risk_free_rate))
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         f = base.mean()
@@ -359,7 +359,7 @@ def make_distribution(chain, manager: ProviderManager, d: DistributionIn):
         except DataUnavailableError as exc:
             raise HTTPException(503, f"Realised volatility needs price history: {exc}") from exc
     try:
-        return build_distribution(chain, manager.risk_free_rate, d.mode, d.drift, d.vol_mult, candles)
+        return build_distribution(chain, (chain.rate or manager.risk_free_rate), d.mode, d.drift, d.vol_mult, candles)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -377,7 +377,7 @@ def score_strategy(body: ScoreIn, manager: ProviderManager = Depends(get_manager
         raise HTTPException(503, str(exc)) from exc
     dist = make_distribution(chain, manager, body.distribution)
     prefs = prefs_from_dict(body.prefs)
-    m = evaluate(strategy, dist, chain.spot, manager.risk_free_rate, chain.carry)
+    m = evaluate(strategy, dist, chain.spot, (chain.rate or manager.risk_free_rate), chain.carry)
     return {"metrics": m, "score": score(m, prefs), "distribution": dist.describe(),
             "source": chain.source, "symbol": chain.symbol}
 
@@ -408,7 +408,7 @@ def optimize_strategy(body: OptimizeIn, request: Request, manager: ProviderManag
     def chain_for(exp):
         return manager.get_chain(body.symbol, exp, chain.source)
 
-    opt = Optimizer(chain, chain_for, dist, prefs, manager.risk_free_rate,
+    opt = Optimizer(chain, chain_for, dist, prefs, (chain.rate or manager.risk_free_rate),
                     body.fill if body.fill in ("ltp", "mid", "market") else "market")
     start = [spec_of({**leg.model_dump(), "expiry": leg.expiry or chain.expiry.isoformat()}) for leg in body.legs]
     iters, beam = max(1, min(body.max_iters, 30)), max(1, min(body.beam, 8))

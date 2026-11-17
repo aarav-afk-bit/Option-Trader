@@ -72,7 +72,7 @@ def recommendations(symbol: str, expiry: Optional[str] = None, source: Optional[
         except DataUnavailableError as exc:
             raise ResolveError(str(exc)) from exc
 
-    return recommend(chain, candles, manager.risk_free_rate, max(lots, 1), later_chain)
+    return recommend(chain, candles, (chain.rate or manager.risk_free_rate), max(lots, 1), later_chain)
 
 
 @router.get("/term-structure")

@@ -27,6 +27,7 @@
     "atm strike": "At the money: the strike closest to the current price.",
     "forward": "The futures-equivalent price the options are priced from (spot plus interest, minus dividends), worked out from live call and put prices.",
     "lot size": "Number of units in one contract. Profits and losses are multiplied by this.",
+    "rate": "Risk-free interest rate for this option's life, read off the US Treasury yield curve. It slightly affects option prices (and the futures price).",
     "data age": "How long ago the exchange produced these prices. Green = fresh.",
     "pcr": "Put-call ratio of open interest. Above 1: more puts written, usually seen as support (bullish). Below 0.7: call writers dominate (bearish).",
     "pcr (oi)": "Put-call ratio of open interest. Above 1: more puts written, usually seen as support (bullish). Below 0.7: call writers dominate (bearish).",

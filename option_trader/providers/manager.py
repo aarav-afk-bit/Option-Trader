@@ -59,6 +59,7 @@ class ProviderManager:
     risk_free_rate: float = 0.065
     stale_seconds: float = 180.0
     live: Optional[object] = None  # LiveHub when real-time ticks are available
+    curve: Optional[object] = None  # TreasuryCurve for term-matched rates
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
 
@@ -89,6 +90,9 @@ class ProviderManager:
         }
         mgr = cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
                   risk_free_rate=settings.risk_free_rate, stale_seconds=settings.stale_seconds)
+        from ..rates import TreasuryCurve
+
+        mgr.curve = TreasuryCurve(settings.data_dir, settings.risk_free_rate)
         tradier = next((p for p in mgr.providers if p.name == "tradier" and p.is_configured()), None)
         if tradier is None and settings.tradier_configured:
             tradier = TradierProvider.from_settings(settings)  # stream even if not a snapshot source
@@ -242,17 +246,26 @@ class ProviderManager:
             self._flag_staleness(chain)  # type: ignore[arg-type]
             self._attach_futures(chain)  # type: ignore[arg-type]
             sanitize(chain)  # type: ignore[arg-type]
-            enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
+            r = self.rate_for(chain)  # type: ignore[arg-type]
+            enrich_chain(chain, r)  # type: ignore[arg-type]
             before = sum(q.suspect for r in chain.rows for q in (r.call, r.put) if q)  # type: ignore[union-attr]
-            validate(chain, self.risk_free_rate)  # type: ignore[arg-type]
+            validate(chain, r)  # type: ignore[arg-type]
             if sum(q.suspect for r in chain.rows for q in (r.call, r.put) if q) != before:  # type: ignore[union-attr]
-                enrich_chain(chain, self.risk_free_rate)  # re-derive the forward without suspects
+                enrich_chain(chain, r)  # re-derive the forward without suspects
             chain.quality = report(chain)  # type: ignore[union-attr]
             self._store(key, chain)
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
 
         return self._apply_live(self._single_flight(key, fetch))  # type: ignore[arg-type]
+
+    def rate_for(self, chain: OptionChain) -> float:
+        """Term-matched risk-free rate from the Treasury curve (or the configured fallback)."""
+        if self.curve is not None:
+            chain.rate, chain.rate_source = self.curve.rate(chain.years_to_expiry())
+        else:
+            chain.rate, chain.rate_source = self.risk_free_rate, f"configured {self.risk_free_rate * 100:.2f}%"
+        return chain.rate
 
     def _attach_futures(self, chain: OptionChain) -> None:
         """Best effort: the exchange futures price for this expiry from the same source."""

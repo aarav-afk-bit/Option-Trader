@@ -51,6 +51,18 @@ def verify(symbol: str, expiry: Optional[str] = None, source: Optional[str] = No
     return out
 
 
+@router.get("/rates")
+def rates(manager: ProviderManager = Depends(get_manager)) -> dict:
+    """The Treasury yield curve the app prices with (or the fallback rate)."""
+    curve = manager.curve.curve() if manager.curve is not None else None
+    if curve is None:
+        return {"available": False, "fallback_rate": manager.risk_free_rate,
+                "error": getattr(manager.curve, "last_error", None)}
+    return {"available": True, **curve.to_dict(),
+            "examples": {label: round(curve.rate(t) * 100, 3) for label, t in
+                         (("1 week", 7 / 365), ("1 month", 30 / 365), ("3 months", 0.25), ("1 year", 1.0))}}
+
+
 @router.get("/indices")
 def indices(manager: ProviderManager = Depends(get_manager)) -> dict:
     from ..indices import get_indices
