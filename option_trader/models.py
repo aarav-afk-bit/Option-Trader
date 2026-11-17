@@ -137,6 +137,7 @@ class OptionChain:
     # Exchange-traded futures price for this expiry, when a future exists (monthly expiries).
     futures_ltp: Optional[float] = None
     quality: Optional[dict] = None  # data-quality report (quality.report)
+    iv30: Optional[float] = None  # 30-day implied volatility index of the underlying, in % (Cboe)
     verification: Optional[dict] = None  # last cross-source check (verify.compare summary)
 
     def __post_init__(self) -> None:
@@ -239,6 +240,7 @@ class OptionChain:
             "forward": self.forward,
             "fut_price": self.fut_price,
             "quality": self.quality,
+            "iv30": self.iv30,
             "verification": self.verification,
             "futures_ltp": self.futures_ltp,
             "carry": self.carry,
