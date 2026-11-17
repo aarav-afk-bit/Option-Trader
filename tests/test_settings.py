@@ -52,7 +52,8 @@ def test_blank_token_keeps_saved_value_and_clear_removes(client, tmp_path):
 def test_validation(client):
     assert client.post("/api/settings", json={"providers": ["bogus"]}).status_code == 422
     assert client.post("/api/settings", json={"risk_free_rate": 2}).status_code == 422
-    assert client.post("/api/settings", json={"charges": {"OPTION_TRADER_GST": "-1"}}).status_code == 422
+    assert client.post("/api/settings", json={"charges": {"OPTION_TRADER_ORF": "-1"}}).status_code == 422
+    assert client.post("/api/settings", json={"charges": {"OPTION_TRADER_GST": "1"}}).status_code == 422  # not a US fee
 
 
 def test_remote_clients_cannot_change_settings(monkeypatch):
@@ -81,3 +82,12 @@ def test_advice_is_source_aware_and_detects_proxies():
     assert "proxy or firewall" in _advice("Cboe", "Tunnel connection failed: 403 Forbidden")
     assert "rejected the token" in _advice("Tradier", "Tradier rejected the token (HTTP 401)")
     assert "Tradier" not in _advice("Yahoo Finance", "HTTP 403")
+
+
+def test_fee_settings_round_trip(client, tmp_path):
+    v = client.post("/api/settings", json={"charges": {"OPTION_TRADER_COMMISSION_PER_CONTRACT": "0.5"}}).json()
+    assert v["charges"]["OPTION_TRADER_COMMISSION_PER_CONTRACT"] == "0.5"
+    assert v["fee_defaults"]["OPTION_TRADER_ORF"] == 0.0229
+    from option_trader.charges import ChargeRates
+
+    assert ChargeRates().commission_per_contract == 0.5

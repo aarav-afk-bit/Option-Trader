@@ -7,6 +7,10 @@
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
 
+  const feeTitle = (t) => `Commission $${t.commission_per_contract}/contract + $${t.commission_per_order}/order, ` +
+    `ORF $${t.orf_per_contract} and OCC $${t.occ_per_contract} per contract, FINRA TAF $${t.taf_per_contract}/contract sold, ` +
+    `SEC fee $${(t.sec_fee_rate * 1e6).toFixed(2)} per $1M sold`;
+
   const state = { templates: [], legs: [], name: "Custom", lastResult: null, analyzeTimer: null, seq: 0 };
 
   /* ---------- templates ---------- */
@@ -293,7 +297,7 @@
         <div title="Cost of crossing the bid/ask spread on entry and exit versus the mid">Spread slippage</div><div>${r.costs.spread_slippage == null ? "–" : fmt(r.costs.spread_slippage)}</div>
         <div>Net max profit</div><div class="pos">${r.unlimited_profit ? "Unlimited" : fmt(r.costs.net_max_profit)}</div>
         <div>Net max loss</div><div class="neg">${r.unlimited_loss ? "Unlimited" : fmt(r.costs.net_max_loss)}</div>
-      </div><p class="muted" title="Brokerage ₹${r.costs.rates.brokerage_per_order}/order, STT ${(r.costs.rates.stt_sell * 100).toFixed(3)}% sell, exchange ${(r.costs.rates.exchange_txn * 100).toFixed(5)}%, stamp ${(r.costs.rates.stamp_buy * 100).toFixed(3)}% buy, SEBI, GST ${(r.costs.rates.gst * 100).toFixed(0)}%">Brokerage, STT, exchange, SEBI, stamp duty and GST at current Indian F&amp;O rates (hover for rates).</p></div>` : ""}
+      </div><p class="muted" title="${feeTitle(r.costs.rates)}">Commission plus ORF, OCC, FINRA TAF and SEC fees (hover for rates; change them in Settings).</p></div>` : ""}
       <div class="card"><h3>Legs as priced</h3><ul class="actions">${legs}</ul></div>`;
   }
 

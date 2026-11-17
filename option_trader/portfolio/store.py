@@ -114,7 +114,7 @@ class PortfolioStore:
 
         lot = base.lot_size or 1
         entry_charges = order_charges(
-            [Fill(l["action"], l["entry"], l["lots"] * lot, l["option_type"] != "FUT") for l in out_legs])
+            [Fill(l["action"], l["entry"], l["lots"] * lot, l["option_type"] != "FUT", lot) for l in out_legs])
         pos = {
             "entry_charges": entry_charges,
             "id": uuid.uuid4().hex[:10], "name": name or "Position", "symbol": base.symbol,
@@ -152,7 +152,7 @@ class PortfolioStore:
 
         from ..charges import Fill, flip, order_charges
 
-        exit_charges = order_charges([Fill(flip(l["action"]), px, l["lots"] * pos["lot_size"], l["option_type"] != "FUT")
+        exit_charges = order_charges([Fill(flip(l["action"]), px, l["lots"] * pos["lot_size"], l["option_type"] != "FUT", pos["lot_size"])
                                       for l, px in zip(pos["legs"], exits)])
 
         def apply(p: dict) -> None:
@@ -210,7 +210,7 @@ def mark_to_market(pos: dict, chain_for: Callable[[date], OptionChain]) -> dict:
         from ..charges import Fill, flip, order_charges
 
         out["pnl"] = round(position_pnl(pos, marks), 2)
-        exit_est = order_charges([Fill(flip(l["action"]), m, l["lots"] * pos["lot_size"], l["option_type"] != "FUT")
+        exit_est = order_charges([Fill(flip(l["action"]), m, l["lots"] * pos["lot_size"], l["option_type"] != "FUT", pos["lot_size"])
                                   for l, m in zip(pos["legs"], marks)])
         out["charges_total"] = round((pos.get("entry_charges") or {}).get("total", 0) + exit_est["total"], 2)
         out["net_pnl"] = round(out["pnl"] - out["charges_total"], 2)
