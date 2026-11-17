@@ -177,6 +177,14 @@
       <div class="card"><h3>Change in open interest</h3><div id="ch-oichg" class="chart"></div></div>
       <div class="card"><h3>IV smile</h3><div id="ch-smile" class="chart"></div></div>
       <div class="card"><h3>IV term structure <button id="load-term" class="small-btn">Load</button></h3><div id="ch-term" class="chart"><p class="muted">Fetches the next expiries' live chains. Press Load.</p></div></div>
+      <div class="card wide"><h3>Volatility surface &amp; skew <button id="load-surface" class="small-btn">Load</button></h3>
+        <div id="vs-summary" class="kv-strip"></div>
+        <div class="chart-grid">
+          <div><div id="ch-surface" class="chart"><p class="muted">Implied volatility across strikes and expiries from the live chains, with 25-delta skew and IV rank. Press Load.</p></div></div>
+          <div><div class="table-wrap"><table class="simple" id="vs-table"><thead><tr><th>Expiry</th><th>Days</th><th>ATM IV</th><th title="25-delta call IV minus 25-delta put IV">RR 25Δ</th><th title="Average of the 25-delta wings minus ATM">BF 25Δ</th><th>25Δ put</th><th>25Δ call</th></tr></thead><tbody></tbody></table></div>
+            <div id="vs-hist" class="chart short"></div></div>
+        </div>
+        <p class="muted" id="vs-note">IV rank compares today's 30-day IV with the past year recorded by this app (Cboe's published IV30 when available).</p></div>
       <div class="card wide"><h3>Dealer gamma exposure <button id="load-gex" class="small-btn">Load</button>
           <select id="gex-exp" class="small-sel" title="How many expiries to include"><option value="1">This expiry</option><option value="4" selected>Next 4 expiries</option><option value="8">Next 8</option></select></h3>
         <div id="gex-summary" class="kv-strip"></div>
@@ -502,5 +510,6 @@
 <script src="/static/valuation.js"></script>
 <script src="/static/events.js"></script>
 <script src="/static/positioning.js"></script>
+<script src="/static/volsurface.js"></script>
 </body>
 </html>

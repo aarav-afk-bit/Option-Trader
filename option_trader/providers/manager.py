@@ -62,6 +62,7 @@ class ProviderManager:
     curve: Optional[object] = None  # TreasuryCurve for term-matched rates
     events: Optional[object] = None  # EventsService (earnings & dividends)
     oi_history: Optional[object] = None  # OIHistory (day-over-day open interest change)
+    iv_history: Optional[object] = None  # IVHistory (daily IV30 for IV rank)
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
 
@@ -101,6 +102,9 @@ class ProviderManager:
         from ..oi_history import OIHistory
 
         mgr.oi_history = OIHistory(settings.data_dir)
+        from ..iv_history import IVHistory
+
+        mgr.iv_history = IVHistory(settings.data_dir)
         tradier = next((p for p in mgr.providers if p.name == "tradier" and p.is_configured()), None)
         if tradier is None and settings.tradier_configured:
             tradier = TradierProvider.from_settings(settings)  # stream even if not a snapshot source
@@ -266,6 +270,11 @@ class ProviderManager:
                     self.oi_history.update(chain)
                 except Exception as exc:  # an enhancement; never fail the chain
                     log.warning("OI history update failed: %s", exc)
+            if self.iv_history is not None and chain.iv30:
+                try:
+                    self.iv_history.record(chain.symbol, chain.iv30 / 100.0, "published")
+                except Exception as exc:
+                    log.warning("IV history update failed: %s", exc)
             self._store(key, chain)
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
