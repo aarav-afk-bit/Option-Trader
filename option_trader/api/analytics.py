@@ -72,7 +72,36 @@ def recommendations(symbol: str, expiry: Optional[str] = None, source: Optional[
         except DataUnavailableError as exc:
             raise ResolveError(str(exc)) from exc
 
-    return recommend(chain, candles, (chain.rate or manager.risk_free_rate), max(lots, 1), later_chain)
+    out = recommend(chain, candles, (chain.rate or manager.risk_free_rate), max(lots, 1), later_chain)
+    out["warnings"] = event_warnings(manager, chain)
+    return out
+
+
+def event_warnings(manager: ProviderManager, chain) -> list[str]:
+    """Plain-English warnings about earnings/dividends inside this expiry (never raises)."""
+    from ..events import assignment_risk, reaction_expiry_ok
+
+    if manager.events is None:
+        return []
+    try:
+        ev = manager.events.get(chain.symbol)
+    except Exception:
+        return []
+    out = []
+    if ev.next_earnings and reaction_expiry_ok(chain.expiry, ev.next_earnings, ev.earnings_timing):
+        when = f" ({ev.earnings_timing})" if ev.earnings_timing else ""
+        out.append(f"Earnings on {ev.next_earnings:%b %d}{when}, before this expiry: implied volatility usually "
+                   "drops sharply after the report (IV crush), which hurts option buyers and helps sellers, "
+                   "and the stock can gap past your strikes.")
+    risk = assignment_risk(chain, ev.ex_dividend, ev.dividend)
+    if risk["applies"]:
+        n = len(risk["contracts"])
+        msg = f"Ex-dividend on {ev.ex_dividend:%b %d} (${ev.dividend:.2f}/share) before this expiry: calls are cheaper and puts dearer by about the dividend."
+        if n:
+            msg += (f" {n} in-the-money call strike{'s' if n > 1 else ''} have less time value than the dividend; "
+                    f"short calls there are likely to be assigned on {risk['exercise_by']}.")
+        out.append(msg)
+    return out
 
 
 @router.get("/term-structure")
@@ -141,3 +170,42 @@ def watchlist(symbols: str, source: Optional[str] = None,
             "bias": "bullish" if score > 0.2 else "bearish" if score < -0.2 else "neutral",
         })
     return {"rows": rows}
+
+
+@router.get("/events")
+def events(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None,
+           manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Earnings and dividends that affect this symbol's options, with what the market prices in."""
+    from ..events import CorporateEvents, assignment_risk, earnings_move, historical_moves, reaction_expiry_ok
+
+    ev = manager.events.get(symbol) if manager.events is not None else CorporateEvents(
+        symbol.upper(), error="Corporate events are not enabled")
+    out: dict = {"symbol": ev.symbol, "events": ev.to_dict(), "available": ev.error is None}
+    try:
+        chain = manager.get_chain(symbol, parse_expiry(expiry), source)
+    except DataUnavailableError:
+        chain = None
+    if chain is not None:
+        out.update(expiry=chain.expiry.isoformat(), exercise=chain.exercise)
+        if ev.next_earnings:
+            def ok(e):
+                return reaction_expiry_ok(e, ev.next_earnings, ev.earnings_timing)
+
+            out["earnings_before_expiry"] = ok(chain.expiry)
+            post = next((e for e in sorted(chain.expiries) if ok(e)), None)
+            pre = max((e for e in chain.expiries if not ok(e)), default=None)
+            if post is not None:
+                try:
+                    post_chain = chain if post == chain.expiry else manager.get_chain(symbol, post, chain.source)
+                    pre_chain = manager.get_chain(symbol, pre, chain.source) if pre is not None else None
+                    out["implied"] = earnings_move(post_chain, pre_chain)
+                except DataUnavailableError as exc:
+                    out["implied_error"] = str(exc)
+        out["ex_div_before_expiry"] = bool(ev.ex_dividend and ev.ex_dividend <= chain.expiry)
+        out["assignment"] = assignment_risk(chain, ev.ex_dividend, ev.dividend)
+    if ev.past_earnings:
+        try:
+            out["history"] = historical_moves(ev.past_earnings, manager.get_history(symbol, "2y", "1d"), ev.past_timing)
+        except DataUnavailableError as exc:
+            out["history_error"] = str(exc)
+    return out

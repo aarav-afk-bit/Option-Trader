@@ -458,6 +458,7 @@ function renderSignals(d) {
     </div><p class="muted">${esc(t.volatility.detail || "")}</p></div>` : "";
 
   $("#signals-out").innerHTML = `
+    ${(d.warnings || []).map((w) => `<div class="banner warn-banner">${esc(w)}</div>`).join("")}
     <div class="cards">
       <div class="card">
         <h3>Market view: <span class="pill ${v.direction}">${v.direction.toUpperCase()}</span></h3>

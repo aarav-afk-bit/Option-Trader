@@ -60,6 +60,7 @@ class ProviderManager:
     stale_seconds: float = 180.0
     live: Optional[object] = None  # LiveHub when real-time ticks are available
     curve: Optional[object] = None  # TreasuryCurve for term-matched rates
+    events: Optional[object] = None  # EventsService (earnings & dividends)
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
 
@@ -93,6 +94,9 @@ class ProviderManager:
         from ..rates import TreasuryCurve
 
         mgr.curve = TreasuryCurve(settings.data_dir, settings.risk_free_rate)
+        from ..events import EventsService
+
+        mgr.events = EventsService()
         tradier = next((p for p in mgr.providers if p.name == "tradier" and p.is_configured()), None)
         if tradier is None and settings.tradier_configured:
             tradier = TradierProvider.from_settings(settings)  # stream even if not a snapshot source
