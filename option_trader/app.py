@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
-from .api import analytics, market, portfolio, settings, strategies
+from .api import analytics, market, portfolio, settings, strategies, valuation
 from .config import get_settings
 from .providers.manager import ProviderManager
 from .portfolio.store import PortfolioStore
@@ -35,6 +35,7 @@ def create_app(manager: Optional[ProviderManager] = None,
     app.include_router(analytics.router)
     app.include_router(portfolio.router)
     app.include_router(settings.router)
+    app.include_router(valuation.router)
 
     static_dir = Path(__file__).parent / "web" / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")

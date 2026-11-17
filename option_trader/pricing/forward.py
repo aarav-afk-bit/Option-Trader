@@ -1,7 +1,7 @@
 """Implied forward (futures-equivalent) price from put-call parity.
 
-Index and stock options on NSE are effectively priced off the futures price, which differs
-from spot by interest and expected dividends. For each strike near the money,
+Listed options are effectively priced off the forward price, which differs from spot by
+interest and expected dividends. For each strike near the money,
 ``F = K + e^{rT} (C - P)``; the median over those strikes is the market's forward. It is then
 expressed as a continuous carry/dividend yield ``q`` so the Black-Scholes-Merton functions
 price exactly as Black-76 on that forward.

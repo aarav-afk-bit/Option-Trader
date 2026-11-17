@@ -219,10 +219,18 @@ class OptionChain:
             )
         return self
 
+    @property
+    def exercise(self) -> str:
+        """US index options are European; equity and ETF options are American."""
+        from .providers.base import exercise_style
+
+        return exercise_style(self.symbol)
+
     def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "expiry": self.expiry.isoformat(),
+            "exercise": self.exercise,
             "spot": self.spot,
             "source": self.source,
             "fetched_at": self.fetched_at.isoformat(),

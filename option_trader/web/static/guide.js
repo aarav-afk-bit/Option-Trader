@@ -50,6 +50,14 @@
     "market": "Whether US options are trading right now (9:30 am–4:00 pm New York time, NYSE holidays and early closes included).",
     "price feed": "LIVE = prices stream tick by tick from Tradier. Snapshot = prices refresh every few seconds (Cboe quotes are about 15 minutes delayed).",
     "position greeks": "How the whole strategy reacts to price (delta), acceleration (gamma), time (theta) and volatility (vega).",
+    "vs mid": "Model value minus the live mid price. Positive = the model thinks the option is worth more than the market charges.",
+    "in bid/ask?": "Whether the model value falls between the live bid and ask, i.e. the market and the model agree within the spread.",
+    "95% ci": "Monte Carlo is random: the true model value lies in this range 95% of the time. More paths make it narrower.",
+    "exercise": "American options (stocks, ETFs) can be exercised any day; European options (SPX, NDX, RUT and other indices) only at expiry.",
+    "early-exercise value": "Extra value of being allowed to exercise early: American tree price minus the European Black-Scholes price.",
+    "american iv": "Implied volatility solved with an American model; slightly lower than the Black-Scholes IV for options with early-exercise value.",
+    "carry / dividend": "Dividend yield (minus borrow) implied by the forward price; it lowers calls and raises puts.",
+    "volatility": "Volatility used by every model: the contract's own market implied volatility unless you type one.",
     "p&l now (model)": "What the position would be worth if you closed it right now at current prices.",
   };
   App.glossary = G;
@@ -60,7 +68,7 @@
   tip.id = "gloss-tip";
   document.body.appendChild(tip);
 
-  const SELECTORS = ["thead th", ".kv > div:nth-child(odd)", ".hud-grid > div:nth-child(odd)", "#chain-meta > span", "table.opt-compare td:first-child"];
+  const SELECTORS = ["thead th", ".kv > div:nth-child(odd)", ".hud-grid > div:nth-child(odd)", "#chain-meta > span", "table.opt-compare td:first-child", ".kv-strip .kv small"];
   function keyFor(el) {
     const own = Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" ");
     const t = (own.trim() || el.textContent.trim()).toLowerCase().replace(/\s+/g, " ").replace(/:$/, "");

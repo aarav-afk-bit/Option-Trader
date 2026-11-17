@@ -96,6 +96,9 @@
   <button class="tab" data-tab="settings" title="Settings &amp; connections (key 9)">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="lbl">Settings</span><kbd>9</kbd>
   </button>
+  <button class="tab" data-tab="valuation" title="Valuation Lab (key 0)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4 19a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 19l-6-10V3"/><path d="M7 14h10"/></svg><span class="lbl">Valuation Lab</span><kbd>0</kbd>
+  </button>
   <div class="side-foot">
     <button type="button" id="tour-open" class="side-btn" title="Take the 1-minute guided tour">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg><span class="lbl">Guide</span><kbd>?</kbd>
@@ -321,6 +324,34 @@
     <div id="pf-list"><p class="muted">No paper positions yet. Build a strategy and press “Paper trade this”.</p></div>
     <p class="muted">Paper trades are opened, valued and closed at live chain prices. No real orders are placed.</p>
   </section>
+  <section id="tab-valuation" class="panel">
+    <form id="vl-form" class="row" autocomplete="off">
+      <label>Strike <select id="vl-strike"></select></label>
+      <label>Type <select id="vl-kind"><option value="CE">Call</option><option value="PE">Put</option></select></label>
+      <label title="Leave blank to use the contract's own market implied volatility">Volatility % <input id="vl-sigma" type="number" step="0.1" min="0.5" max="500" placeholder="market IV" class="small"></label>
+      <label title="More paths = smaller Monte Carlo error, slower">MC paths
+        <select id="vl-paths"><option value="20000">20k</option><option value="100000" selected>100k</option><option value="400000">400k</option></select>
+      </label>
+      <button type="submit" class="primary">Value contract</button>
+      <span id="vl-status" class="muted"></span>
+    </form>
+    <p class="muted">Prices the selected live contract with 11 models (closed form, stochastic volatility, trees, American approximations and Monte Carlo) and compares each with the live bid/ask. Inputs come from the chain: spot, the put-call-parity forward, the Treasury rate and the contract's implied volatility.</p>
+    <div id="vl-inputs" class="kv-strip"></div>
+    <div class="chart-grid">
+      <div class="card wide"><h3>Model prices vs the market</h3>
+        <div class="table-wrap"><table class="simple" id="vl-table">
+          <thead><tr><th>Model</th><th>Type</th><th>Value</th><th title="Model value minus market mid">vs mid</th><th>In bid/ask?</th><th title="95% confidence interval (Monte Carlo)">95% CI</th><th>Time</th><th>Notes</th></tr></thead>
+          <tbody><tr><td colspan="8" class="muted">Load a chain, pick a contract and press “Value contract”.</td></tr></tbody>
+        </table></div>
+        <p id="vl-explain" class="hint"></p>
+      </div>
+      <div class="card"><h3>Values against the bid/ask</h3><div id="vl-bars" class="chart"></div></div>
+      <div class="card"><h3>Heston fit to this expiry's smile</h3><div id="vl-smile" class="chart"></div><div id="vl-heston" class="muted"></div></div>
+      <div class="card wide"><h3>Convergence: binomial tree and Monte Carlo</h3><div id="vl-conv" class="chart"></div>
+        <p class="muted">The tree approaches the exact value as steps increase; Monte Carlo's 95% band narrows with the square root of the paths.</p></div>
+    </div>
+  </section>
+
   <section id="tab-settings" class="panel">
     <div class="cards settings-grid">
       <div class="card">
@@ -413,7 +444,7 @@
   <div class="hud-sep"></div>
   <div class="hud-keys">
     <div class="muted">Shortcuts</div>
-    <div><kbd>1</kbd>–<kbd>9</kbd> sections</div>
+    <div><kbd>1</kbd>–<kbd>0</kbd> sections</div>
     <div><kbd>/</kbd> symbol · <kbd>R</kbd> refresh</div>
     <div><kbd>O</kbd> optimise · <kbd>Q</kbd> quick trade</div>
     <div><kbd>Ctrl K</kbd> commands · <kbd>?</kbd> help</div>
@@ -455,5 +486,6 @@
 <script src="/static/fx.js"></script>
 <script src="/static/settings.js"></script>
 <script src="/static/quicktrade.js"></script>
+<script src="/static/valuation.js"></script>
 </body>
 </html>

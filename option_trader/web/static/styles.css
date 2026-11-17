@@ -514,3 +514,12 @@ button.qt-btn:hover:not(:disabled) { color: var(--green); border-color: var(--gr
 .qt-stats b { font-size: 18px; font-family: var(--font-mono); }
 #qt-risk { width: 160px; }
 .qt-box.neon-panel::after, .cmd-box.neon-panel::after { display: none; }
+
+/* ---------- valuation lab ---------- */
+.kv-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.kv-strip .kv { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; min-width: 110px; }
+.kv-strip .kv small { display: block; color: var(--muted); font-size: 11px; }
+.kv-strip .kv b { font-family: var(--font-mono); font-size: 14px; }
+#vl-table tr.na td { opacity: 0.55; }
+#vl-table td.num { font-family: var(--font-mono); text-align: right; }
+@media (max-width: 600px) { .chart-grid { grid-template-columns: 1fr; } }
