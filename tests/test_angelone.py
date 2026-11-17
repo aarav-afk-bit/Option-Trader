@@ -95,7 +95,7 @@ def settings(tmp_path, **kw):
     s.angel_api_key = kw.get("key", "key")
     s.angel_client_code = "C123"
     s.angel_pin = "1234"
-    s.angel_totp_secret = "JBSWY3DPEHPK3PXP"
+    s.angel_totp_secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
     return s
 
 

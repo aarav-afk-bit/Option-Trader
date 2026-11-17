@@ -340,6 +340,7 @@ class AngelOneProvider(DataProvider):
             spot=spot,
             rows=list(rows.values()),
             source="angelone",
+            currency="INR",
             fetched_at=utcnow(),
             lot_size=self.master().lot_sizes.get(name),
             expiries=expiries,
