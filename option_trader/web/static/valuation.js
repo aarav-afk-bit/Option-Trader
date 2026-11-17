@@ -129,20 +129,20 @@
       const d = await api("/api/valuation/smile?" + new URLSearchParams({ symbol: p.symbol, expiry: p.expiry, source: p.source }));
       const c = App.colors();
       const pts = d.points;
-      Plotly.react(el, [
+      App.plot(el, [
         { x: pts.map((q) => q.strike), y: pts.map((q) => q.iv * 100), mode: "markers", name: "Market IV", marker: { color: c.s2, size: 7 } },
         { x: pts.map((q) => q.strike), y: pts.map((q) => (q.heston_iv == null ? null : q.heston_iv * 100)), mode: "lines", name: "Heston fit", line: { color: c.s1, width: 2 } },
       ], App.plotLayout({
         xaxis: { title: "Strike" }, yaxis: { title: "Implied volatility %" },
         shapes: [{ type: "line", x0: d.spot, x1: d.spot, yref: "paper", y0: 0, y1: 1, line: { color: c.muted, dash: "dot" } }],
-      }), { displayModeBar: false, responsive: true });
+      }));
       const h = d.heston;
       $("#vl-heston").innerHTML = `Fitted on ${d.fitted_on} out-of-the-money strikes, error ${(d.rmse_vol * 100).toFixed(2)} vol pts. ` +
         `Current vol ${(Math.sqrt(h.v0) * 100).toFixed(1)}%, long-run vol ${(Math.sqrt(h.theta) * 100).toFixed(1)}%, ` +
         `mean reversion ${h.kappa.toFixed(2)}/yr, vol of vol ${h.xi.toFixed(2)}, spot–vol correlation ${h.rho.toFixed(2)}` +
         (h.rho < -0.3 ? " (prices and volatility move opposite ways: puts carry a skew premium)." : ".");
     } catch (e) {
-      el.innerHTML = `<p class="muted">Heston fit unavailable: ${esc(e.message)}</p>`;
+      App.chartMessage(el, `<p class="muted">Heston fit unavailable: ${esc(e.message)}</p>`);
       $("#vl-heston").textContent = "";
     }
   }
@@ -153,7 +153,7 @@
       const d = await api("/api/valuation/convergence?" + new URLSearchParams(p));
       const c = App.colors();
       const mc = d.mc;
-      Plotly.react(el, [
+      App.plot(el, [
         { x: d.tree.map((t) => t.steps), y: d.tree.map((t) => t.price), name: d.american ? "Binomial tree (American)" : "Binomial tree", mode: "lines+markers", line: { color: c.s1 }, xaxis: "x", yaxis: "y" },
         { x: mc.map((m) => m.paths), y: mc.map((m) => m.hi), mode: "lines", line: { width: 0 }, showlegend: false, hoverinfo: "skip", xaxis: "x2", yaxis: "y" },
         { x: mc.map((m) => m.paths), y: mc.map((m) => m.lo), mode: "lines", line: { width: 0 }, fill: "tonexty", fillcolor: App.alpha(c.s2, 0.2), name: "MC 95% band", hoverinfo: "skip", xaxis: "x2", yaxis: "y" },
@@ -165,9 +165,9 @@
         yaxis: { title: "Value ($)" },
         shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: d.bsm, y1: d.bsm, line: { color: c.muted, dash: "dash" } }],
         annotations: [{ xref: "paper", x: 1, y: d.bsm, text: `Black-Scholes ${usd(d.bsm, 3)}`, showarrow: false, yanchor: "bottom", xanchor: "right", font: { color: c.muted, size: 11 } }],
-      }), { displayModeBar: false, responsive: true });
+      }));
     } catch (e) {
-      el.innerHTML = `<p class="muted">Convergence unavailable: ${esc(e.message)}</p>`;
+      App.chartMessage(el, `<p class="muted">Convergence unavailable: ${esc(e.message)}</p>`);
     }
   }
 

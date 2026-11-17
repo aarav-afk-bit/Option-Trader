@@ -61,6 +61,7 @@ class ProviderManager:
     live: Optional[object] = None  # LiveHub when real-time ticks are available
     curve: Optional[object] = None  # TreasuryCurve for term-matched rates
     events: Optional[object] = None  # EventsService (earnings & dividends)
+    oi_history: Optional[object] = None  # OIHistory (day-over-day open interest change)
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
 
@@ -97,6 +98,9 @@ class ProviderManager:
         from ..events import EventsService
 
         mgr.events = EventsService()
+        from ..oi_history import OIHistory
+
+        mgr.oi_history = OIHistory(settings.data_dir)
         tradier = next((p for p in mgr.providers if p.name == "tradier" and p.is_configured()), None)
         if tradier is None and settings.tradier_configured:
             tradier = TradierProvider.from_settings(settings)  # stream even if not a snapshot source
@@ -257,6 +261,11 @@ class ProviderManager:
             if sum(q.suspect for r in chain.rows for q in (r.call, r.put) if q) != before:  # type: ignore[union-attr]
                 enrich_chain(chain, r)  # re-derive the forward without suspects
             chain.quality = report(chain)  # type: ignore[union-attr]
+            if self.oi_history is not None:
+                try:
+                    self.oi_history.update(chain)
+                except Exception as exc:  # an enhancement; never fail the chain
+                    log.warning("OI history update failed: %s", exc)
             self._store(key, chain)
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
