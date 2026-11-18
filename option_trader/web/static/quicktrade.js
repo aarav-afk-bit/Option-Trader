@@ -5,8 +5,8 @@
   const { api } = window.App;
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const inr = (v, d = 0) => (v == null ? "–" : "₹" + Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
-  const num = (v, d = 0) => Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const inr = (v, d = 0) => (v == null ? "–" : (v < 0 ? "-$" : "$") + Math.abs(Number(v)).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const num = (v, d = 0) => Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 
   const VIEWS = [
     ["up", "📈", "It will go up", "Profit if the price rises."],
@@ -53,7 +53,7 @@
       const lot = App.chain.lot_size || 1;
       body.innerHTML = steps() + `<p>How much are you willing to lose at most on this trade?</p>
         <label>Maximum loss <input id="qt-risk" type="number" min="500" step="500" value="${state.risk}"></label>
-        <p class="muted">One lot is ${lot} units. The trade will never risk more than this (after charges).</p>
+        <p class="muted">One contract covers ${lot} shares. The trade will never risk more than this (after charges).</p>
         <label><span>What matters more?</span>
           <div class="slider-ends"><span>Winning more often</span><span>Bigger profits</span></div>
           <input id="qt-goal" type="range" min="0" max="100" step="10" value="${state.goal}"></label>
@@ -89,8 +89,8 @@
 
   function sentence(l, lot, sym) {
     const qty = l.lots * lot;
-    const what = l.option_type === "FUT" ? `${sym} futures` : `the ${num(l.strike)} ${l.option_type === "CE" ? "Call" : "Put"}`;
-    return `<b class="${l.action === "BUY" ? "pos" : "neg"}">${l.action === "BUY" ? "Buy" : "Sell"}</b> ${l.lots} lot${l.lots > 1 ? "s" : ""} (${qty} qty) of ${what} at about <b>${inr(l.premium, 2)}</b>`;
+    const what = l.option_type === "FUT" ? `${sym} shares` : `the ${num(l.strike)} ${l.option_type === "CE" ? "Call" : "Put"}`;
+    return `<b class="${l.action === "BUY" ? "pos" : "neg"}">${l.action === "BUY" ? "Buy" : "Sell"}</b> ${l.option_type === "FUT" ? `${qty} shares` : `${l.lots} contract${l.lots > 1 ? "s" : ""}`} of ${what} at about <b>${inr(l.premium, 2)}</b>`;
   }
 
   function showResult() {

@@ -166,9 +166,9 @@ class Optimizer:
                     new = legs[:i] + [(t, a, nk, lots, e)] + legs[i + 1:]
                     out.append((new, f"Move {describe(legs[i])} to {nk:g}"))
             if lots + 1 <= maxl:
-                out.append((legs[:i] + [(t, a, k, lots + 1, e)] + legs[i + 1:], f"Add a lot to {describe(legs[i])}"))
+                out.append((legs[:i] + [(t, a, k, lots + 1, e)] + legs[i + 1:], f"Add a contract to {describe(legs[i])}"))
             if lots > 1:
-                out.append((legs[:i] + [(t, a, k, lots - 1, e)] + legs[i + 1:], f"Remove a lot from {describe(legs[i])}"))
+                out.append((legs[:i] + [(t, a, k, lots - 1, e)] + legs[i + 1:], f"Remove a contract from {describe(legs[i])}"))
             if len(legs) > 1:
                 out.append((legs[:i] + legs[i + 1:], f"Drop {describe(legs[i])}"))
             if a == "SELL" and len(legs) < self.prefs.max_legs:

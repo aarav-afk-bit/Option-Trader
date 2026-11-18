@@ -119,11 +119,14 @@ def _actions(chain: OptionChain, strategy_dict: dict) -> list[str]:
     out = []
     for leg in strategy_dict["legs"]:
         exp = leg["expiry"]
-        qty = f"{leg['lots']} lot{'s' if leg['lots'] > 1 else ''}" + (f" ({leg['lots'] * lot} qty)" if lot > 1 else "")
+        n = leg["lots"]
+        qty = (f"{n * lot} shares" if leg["option_type"] == "FUT"
+               else f"{n} contract{'s' if n > 1 else ''}" + (f" (x{lot})" if lot > 1 else ""))
         if leg["option_type"] == "FUT":
-            out.append(f"{leg['action']} {qty} {chain.symbol} underlying/futures @ {leg['premium']:.2f}")
+            out.append(f"{leg['action']} {qty} of {chain.symbol} @ {leg['premium']:.2f}")
         else:
-            out.append(f"{leg['action']} {qty} {chain.symbol} {exp} {leg['strike']:g} {leg['option_type']} "
+            kind = {"CE": "call", "PE": "put"}.get(leg["option_type"], leg["option_type"])
+            out.append(f"{leg['action']} {qty} {chain.symbol} {exp} {leg['strike']:g} {kind} "
                        f"@ {leg['premium']:.2f}")
     return out
 

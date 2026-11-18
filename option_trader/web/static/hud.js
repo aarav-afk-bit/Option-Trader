@@ -4,7 +4,7 @@
 (function () {
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
-  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const store = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* ignore */ } };
   const load = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
@@ -25,7 +25,7 @@
 
   /* ---------- live readouts ---------- */
   function tickClock() {
-    const t = new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false });
+    const t = new Date().toLocaleTimeString("en-GB", { timeZone: "America/New_York", hour12: false });
     $("#hud-time").textContent = t;
   }
   setInterval(tickClock, 1000);

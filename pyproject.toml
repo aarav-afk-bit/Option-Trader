@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "option-trader"
 version = "0.1.0"
-description = "Real-data options chain analysis, signals and strategy builder for NSE and other markets"
+description = "Real-data US options analysis, valuation models, signals and strategy builder"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

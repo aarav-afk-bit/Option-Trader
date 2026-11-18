@@ -5,7 +5,7 @@
   const { api, qs } = window.App;
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
 
   const feeTitle = (t) => `Commission $${t.commission_per_contract}/contract + $${t.commission_per_order}/order, ` +
     `ORF $${t.orf_per_contract} and OCC $${t.occ_per_contract} per contract, FINRA TAF $${t.taf_per_contract}/contract sold, ` +
@@ -35,7 +35,7 @@
   function describeTemplate() {
     const t = currentTemplate();
     if (!t) return;
-    const legs = t.legs.map((l) => `${l.action} ${l.lots > 1 ? l.lots + "× " : ""}${l.option_type === "FUT" ? "underlying" : `${l.option_type} ATM${l.offset ? (l.offset > 0 ? "+" : "") + l.offset : ""}`}${l.expiry_offset ? " (next expiry)" : ""}`);
+    const legs = t.legs.map((l) => `${l.action} ${l.lots > 1 ? l.lots + "× " : ""}${l.option_type === "FUT" ? "100 shares" : `${l.option_type === "CE" ? "call" : "put"} ATM${l.offset ? (l.offset > 0 ? "+" : "") + l.offset : ""}`}${l.expiry_offset ? " (next expiry)" : ""}`);
     $("#tpl-desc").textContent = `${t.description || ""} Legs: ${legs.join(", ")}.`;
     $("#tpl-delete").classList.toggle("hidden", t.builtin);
   }
@@ -115,7 +115,7 @@
       const live = liveQuote(l);
       return `<tr class="${l.action.toLowerCase()}" data-i="${i}">
         <td><select data-k="action">${opt(["BUY", "SELL"], l.action)}</select></td>
-        <td><select data-k="option_type">${opt(["CE", "PE", "FUT"], l.option_type)}</select></td>
+        <td><select data-k="option_type">${opt(["CE", "PE", "FUT"], l.option_type, (v) => ({ CE: "Call", PE: "Put", FUT: "Stock" })[v])}</select></td>
         <td><select data-k="expiry">${opt(exps, l.expiry, shortDate)}</select></td>
         <td>${l.option_type === "FUT" ? "–" : `<select data-k="strike">${opt(strikeList, l.strike, (v) => fmt(v, v % 1 ? 2 : 0))}</select>`}</td>
         <td class="num"><input data-k="lots" type="number" min="1" value="${l.lots}"></td>
@@ -227,7 +227,7 @@
       margin: { l: 70, r: 20, t: 40, b: 50 },
       title: { text: `${esc(r.strategy.name)} · ${esc(r.symbol)} · spot ${fmt(r.spot)} · ${esc(r.source.toUpperCase())}`, font: { size: 14, color: c.text } },
       xaxis: { title: "Underlying price" },
-      yaxis: { title: "Profit / loss (₹)", zerolinecolor: c.muted, zerolinewidth: 1 },
+      yaxis: { title: "Profit / loss ($)", zerolinecolor: c.muted, zerolinewidth: 1 },
       legend: { orientation: "h", y: -0.18, font: { color: c.text } },
       shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: c.accent, dash: "dot", width: 1 } }],
       annotations: [
@@ -274,7 +274,7 @@
   function drawStats(r) {
     const g = r.greeks;
     const money = (v, unl) => (unl ? "Unlimited" : fmt(v));
-    const legs = r.strategy.legs.map((l) => `<li>${l.action} ${l.lots} lot(s) ${l.option_type === "FUT" ? "underlying" : `${fmt(l.strike, l.strike % 1 ? 2 : 0)} ${l.option_type}`} ${esc(l.expiry || "")} @ ${fmt(l.premium)}${l.iv ? ` · IV ${(l.iv * 100).toFixed(1)}%` : ""}</li>`).join("");
+    const legs = r.strategy.legs.map((l) => `<li>${l.action} ${l.lots} contract(s) ${l.option_type === "FUT" ? "× 100 shares" : `${fmt(l.strike, l.strike % 1 ? 2 : 0)} ${l.option_type}`} ${esc(l.expiry || "")} @ ${fmt(l.premium)}${l.iv ? ` · IV ${(l.iv * 100).toFixed(1)}%` : ""}</li>`).join("");
     $("#builder-stats").innerHTML = `
       <div class="card"><h3>Payoff</h3><div class="kv">
         <div>Net premium</div><div class="${r.net_premium >= 0 ? "pos" : "neg"}">${fmt(r.net_premium)} (${r.premium_type})</div>
