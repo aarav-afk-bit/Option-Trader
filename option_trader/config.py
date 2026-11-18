@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-VALID_PROVIDERS = ("nse", "angelone", "yahoo")
+VALID_PROVIDERS = ("cboe", "yahoo", "nse", "angelone")
 
 # Settings saved from the in-app Settings page live in the data directory and take precedence
 # over .env (they are the most recent choice). Secrets go to a separate owner-only file.
@@ -86,7 +86,7 @@ def _float_env(name: str, default: float) -> float:
 
 
 def _providers_env() -> list[str]:
-    raw = os.getenv("OPTION_TRADER_PROVIDERS", ",".join(VALID_PROVIDERS))
+    raw = os.getenv("OPTION_TRADER_PROVIDERS", "cboe,yahoo")
     providers = [p.strip().lower() for p in raw.split(",") if p.strip()]
     unknown = [p for p in providers if p not in VALID_PROVIDERS]
     if unknown:

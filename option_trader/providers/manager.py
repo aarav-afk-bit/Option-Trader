@@ -78,11 +78,13 @@ class ProviderManager:
     @classmethod
     def from_settings(cls, settings: Optional[Settings] = None) -> "ProviderManager":
         from .angelone import AngelOneProvider
+        from .cboe import CboeProvider
         from .nse import NSEProvider
         from .yahoo import YahooProvider
 
         settings = settings or get_settings()
         factories = {
+            "cboe": CboeProvider,
             "nse": NSEProvider,
             "yahoo": YahooProvider,
             "angelone": lambda: AngelOneProvider(settings),

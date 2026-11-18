@@ -7,7 +7,7 @@ def test_defaults(monkeypatch):
     monkeypatch.delenv("OPTION_TRADER_PROVIDERS", raising=False)
     monkeypatch.delenv("OPTION_TRADER_RISK_FREE_RATE", raising=False)
     s = Settings()
-    assert s.providers == ["nse", "angelone", "yahoo"]
+    assert s.providers == ["cboe", "yahoo"]  # US sources by default
     assert s.risk_free_rate == pytest.approx(0.065)
 
 
