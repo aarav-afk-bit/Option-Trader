@@ -137,10 +137,23 @@
         shapes: [{ type: "line", x0: d.spot, x1: d.spot, yref: "paper", y0: 0, y1: 1, line: { color: c.muted, dash: "dot" } }],
       }));
       const h = d.heston;
+      const se = h.stderr || {}, ok = h.identified || {};
+      // Show only what the quotes pin down as a fitted value; the rest are labelled as assumptions.
+      const val = (k, txt, sdTxt) => (ok[k] === false ? `<span class="muted" title="Not pinned down by one expiry's quotes">${txt} (uncertain${sdTxt ? ", ±" + sdTxt : ""})</span>` : `${txt}${sdTxt ? " ±" + sdTxt : ""}`);
+      const volPct = (v) => (Math.sqrt(Math.max(v, 0)) * 100).toFixed(1) + "%";
+      const v0sd = se.v0 != null ? ((se.v0 / (2 * Math.sqrt(h.v0))) * 100).toFixed(2) + " pts" : "";
+      const parts = [
+        `Current vol ${val("v0", volPct(h.v0), v0sd)}`,
+        `vol of vol ${val("xi", h.xi.toFixed(2), se.xi != null && se.xi < 9 ? se.xi.toFixed(2) : "")}`,
+        `spot–vol correlation ${val("rho", h.rho.toFixed(2), se.rho != null && se.rho < 9 ? se.rho.toFixed(2) : "")}`,
+      ];
+      const assumed = ["kappa", "theta"].every((k) => ok[k] === false)
+        ? ` Long-run vol ${volPct(h.theta)} and mean reversion ${h.kappa.toFixed(1)}/yr are assumptions: a single expiry can't measure them.`
+        : ` Long-run vol ${volPct(h.theta)}, mean reversion ${h.kappa.toFixed(2)}/yr.`;
       $("#vl-heston").innerHTML = `Fitted on ${d.fitted_on} out-of-the-money strikes, error ${(d.rmse_vol * 100).toFixed(2)} vol pts. ` +
-        `Current vol ${(Math.sqrt(h.v0) * 100).toFixed(1)}%, long-run vol ${(Math.sqrt(h.theta) * 100).toFixed(1)}%, ` +
-        `mean reversion ${h.kappa.toFixed(2)}/yr, vol of vol ${h.xi.toFixed(2)}, spot–vol correlation ${h.rho.toFixed(2)}` +
-        (h.rho < -0.3 ? " (prices and volatility move opposite ways: puts carry a skew premium)." : ".");
+        parts.join(", ") + "." + assumed +
+        (ok.rho !== false && h.rho < -0.3 ? " Prices and volatility move opposite ways: puts carry a skew premium." : "") +
+        " Parameters can be uncertain while prices stay reliable: the fitted smile is checked against held-out strikes.";
     } catch (e) {
       App.chartMessage(el, `<p class="muted">Heston fit unavailable: ${esc(e.message)}</p>`);
       $("#vl-heston").textContent = "";
