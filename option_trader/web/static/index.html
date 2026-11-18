@@ -382,13 +382,17 @@
         </div>
       </div>
       <div class="card">
-        <h3>4. Trading charges</h3>
-        <p class="muted">Used for net P&amp;L. Defaults follow current Indian F&amp;O rates; match them to your broker.</p>
+        <h3>4. Trading fees</h3>
+        <p class="muted">Used for net P&amp;L. Set the commission to your broker's; regulatory fees are passed through by every US broker. Blank = default.</p>
         <div class="row">
-          <label>Brokerage ₹/order <input id="st-OPTION_TRADER_BROKERAGE_PER_ORDER" type="number" step="1" min="0" class="small" placeholder="20"></label>
-          <label>STT on sell (fraction) <input id="st-OPTION_TRADER_STT_SELL" type="number" step="0.0001" min="0" class="small" style="width:100px" placeholder="0.001"></label>
-          <label>Exchange charge <input id="st-OPTION_TRADER_EXCHANGE_TXN" type="number" step="0.000001" min="0" class="small" style="width:110px" placeholder="0.0003503"></label>
-          <label>GST <input id="st-OPTION_TRADER_GST" type="number" step="0.01" min="0" class="small" placeholder="0.18"></label>
+          <label title="Broker commission per option contract">Commission $/contract <input id="st-OPTION_TRADER_COMMISSION_PER_CONTRACT" type="number" step="0.01" min="0" class="small" placeholder="0.65"></label>
+          <label title="Flat ticket charge per order (most brokers: 0)">$/order <input id="st-OPTION_TRADER_COMMISSION_PER_ORDER" type="number" step="0.01" min="0" class="small" placeholder="0"></label>
+          <label title="Options Regulatory Fee per contract, buys and sells">ORF $/contract <input id="st-OPTION_TRADER_ORF" type="number" step="0.0001" min="0" class="small" style="width:90px" placeholder="0.0229"></label>
+        </div>
+        <div class="row">
+          <label title="Options Clearing Corporation fee per contract">OCC $/contract <input id="st-OPTION_TRADER_OCC_FEE" type="number" step="0.001" min="0" class="small" placeholder="0.02"></label>
+          <label title="FINRA Trading Activity Fee per contract sold (capped at $8.30 per trade)">FINRA TAF $/contract sold <input id="st-OPTION_TRADER_FINRA_TAF" type="number" step="0.00001" min="0" class="small" style="width:90px" placeholder="0.00279"></label>
+          <label title="SEC Section 31 fee as a fraction of sale proceeds (27.80 per million = 0.0000278)">SEC fee (fraction of sales) <input id="st-OPTION_TRADER_SEC_FEE" type="number" step="0.0000001" min="0" class="small" style="width:110px" placeholder="0.0000278"></label>
         </div>
         <div class="row"><button id="st-save" class="primary" type="button">Save settings</button><span id="st-msg" class="muted"></span></div>
         <p class="muted" id="st-dir"></p>

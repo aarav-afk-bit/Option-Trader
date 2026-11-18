@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from .. import config
+from ..charges import FEE_ENV, FEE_KEYS
 from ..errors import DataUnavailableError
 
 router = APIRouter(prefix="/api/settings")
@@ -45,7 +46,8 @@ def get_settings_view() -> dict:
         "cache_ttl": s.cache_ttl,
         "stale_seconds": s.stale_seconds,
         "live_ticks": s.live_ticks,
-        "charges": {k: os.getenv(k, "") for k in sorted(config.EDITABLE_KEYS) if "BROKERAGE" in k or k.endswith(("STT_SELL", "EXCHANGE_TXN", "SEBI_FEE", "STAMP_BUY", "GST"))},
+        "charges": {k: os.getenv(k, "") for k in FEE_KEYS},
+        "fee_defaults": {env: default for env, default in FEE_ENV.values()},
         "tradier": {"configured": s.tradier_configured, "token": _mask(s.tradier_token), "sandbox": s.tradier_sandbox},
         "data_dir": str(s.data_dir),
     }
@@ -100,8 +102,8 @@ def save(body: SettingsIn, request: Request) -> dict:
     if body.live_ticks is not None:
         values["OPTION_TRADER_LIVE_TICKS"] = "1" if body.live_ticks else "0"
     for k, v in (body.charges or {}).items():
-        if k not in config.EDITABLE_KEYS:
-            raise HTTPException(422, f"Unknown charge setting {k}")
+        if k not in FEE_KEYS:
+            raise HTTPException(422, f"Unknown fee setting {k}")
         if v != "":
             try:
                 if float(v) < 0:

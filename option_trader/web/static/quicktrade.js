@@ -109,7 +109,7 @@
         <div><small>Most you can make</small><b class="pos">${an.unlimited_profit ? "Unlimited" : inr(an.costs.net_max_profit)}</b></div>
         <div><small>Chance of profit${state.view === "auto" ? "" : " if your view is right"}</small><b>${(m.win_rate * 100).toFixed(0)}%</b></div>
       </div>
-      <p>${premium} ${beText} Figures include about ${inr(an.costs.round_trip)} of brokerage, taxes and fees.</p>
+      <p>${premium} ${beText} Figures include about ${inr(an.costs.round_trip)} of commission and regulatory fees.</p>
       <p class="muted">Based on live ${esc(an.source.toUpperCase())} prices and ${state.view === "auto" ? "the app's current signals" : "your view"}. This is not a guarantee: markets can do anything.</p>
       <div class="row qt-nav">
         <button type="button" id="qt-restart">Start over</button>

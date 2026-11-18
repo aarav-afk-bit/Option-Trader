@@ -45,7 +45,7 @@
     "win rate": "Estimated chance the strategy ends in profit at expiry, after charges.",
     "expected p&l": "Average result over all the outcomes the price model considers likely, after charges. Positive = an edge.",
     "score": "The optimiser's rating: a blend of win rate and expected return per rupee risked, set by your goal slider.",
-    "charges": "Brokerage, STT, exchange fees, SEBI fee, stamp duty and GST for the trade.",
+    "charges": "Commission plus the regulatory fees every US broker passes on: ORF and OCC clearing per contract, and FINRA TAF and the SEC fee on sales.",
     "spread slippage": "What crossing the bid/ask spread costs you on the way in and out, compared with the mid price.",
     "market": "Whether US options are trading right now (9:30 am–4:00 pm New York time, NYSE holidays and early closes included).",
     "price feed": "LIVE = prices stream tick by tick from Tradier. Snapshot = prices refresh every few seconds (Cboe quotes are about 15 minutes delayed).",
