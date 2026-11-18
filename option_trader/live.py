@@ -59,6 +59,7 @@ def overlay(chain: OptionChain, mapping: dict, tick, r: float, feed_name: str) -
     if applied or latest:
         from .quality import report, sanitize, validate
 
+        r = chain.rate or r
         sanitize(chain)
         enrich_chain(chain, r)
         validate(chain, r)
