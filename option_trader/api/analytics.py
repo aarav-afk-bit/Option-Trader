@@ -248,3 +248,49 @@ def flow(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None
 
     chains = _near_chains(manager, symbol, expiry, source, min(max(expiries, 1), 8))
     return unusual_activity(chains, max(min_volume, 1), max(min_vol_oi, 0.0), max(min_premium, 0.0))
+
+
+def _hv(candles, days: int = 20) -> Optional[float]:
+    import math
+
+    closes = [c.close for c in candles if c.close][-(days + 1):]
+    if len(closes) < days + 1:
+        return None
+    rets = [math.log(b / a) for a, b in zip(closes, closes[1:])]
+    m = sum(rets) / len(rets)
+    return math.sqrt(sum((x - m) ** 2 for x in rets) / (len(rets) - 1) * 252)
+
+
+@router.get("/surface")
+def vol_surface(symbol: str, source: Optional[str] = None, expiries: int = 8,
+                manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Implied-volatility surface, 25-delta skew per expiry, IV30 and IV rank/percentile."""
+    from ..analytics.surface import surface
+
+    try:
+        first = manager.get_chain(symbol, None, source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    start = min(first.expiries or [first.expiry])  # the surface starts at the nearest listed expiry
+    chains = _near_chains(manager, symbol, start.isoformat(), first.source, min(max(expiries, 2), 12))
+    out = surface(chains, lambda c: c.rate or manager.risk_free_rate)
+    published = chains[0].iv30 / 100.0 if chains[0].iv30 else None
+    current = published if published is not None else out["iv30"]
+    out["iv30_source"] = "Cboe published IV30" if published is not None else (
+        "computed: 30-day ATM IV from the listed expiries" if out["iv30"] else None)
+    out["iv30_current"] = current
+    hist = getattr(manager, "iv_history", None)
+    if hist is not None:
+        if published is None and out["iv30"]:
+            hist.record(chains[0].symbol, out["iv30"], "computed")
+        out["iv_rank"] = hist.rank(chains[0].symbol, current)
+    else:
+        out["iv_rank"] = None
+    try:
+        hv = _hv(manager.get_history(symbol, "3mo", "1d"))
+    except DataUnavailableError:
+        hv = None
+    out["hv20"] = hv
+    out["iv_hv_ratio"] = round(current / hv, 3) if current and hv else None
+    out["source"] = chains[0].source
+    return out
