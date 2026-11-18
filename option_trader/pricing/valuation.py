@@ -107,9 +107,18 @@ class HestonParams:
     xi: float  # vol of vol
     rho: float  # spot/vol correlation
 
+    # Filled by calibrate_heston: 1-sd uncertainty of each parameter from the data alone, and
+    # whether the quotes actually pin it down (a single expiry can't identify every parameter).
+    stderr: Optional[dict] = None
+    identified: Optional[dict] = None
+
     def as_dict(self) -> dict:
-        return {"v0": self.v0, "kappa": self.kappa, "theta": self.theta, "xi": self.xi, "rho": self.rho,
-                "feller": 2 * self.kappa * self.theta - self.xi ** 2}
+        d = {"v0": self.v0, "kappa": self.kappa, "theta": self.theta, "xi": self.xi, "rho": self.rho,
+             "feller": 2 * self.kappa * self.theta - self.xi ** 2}
+        if self.stderr is not None:
+            d["stderr"] = self.stderr
+            d["identified"] = self.identified
+        return d
 
 
 def _heston_cf(u, T, r, q, S, p: HestonParams):
@@ -373,7 +382,7 @@ def mc_heston(S, K, T, r, q, kind, params: HestonParams, paths=100_000, steps=10
 # Calibration
 # ------------------------------------------------------------------------------------------
 def calibrate_heston(S, T, r, q, strikes: list[float], ivs: list[float], weights: Optional[list[float]] = None,
-                     max_evals: int = 200) -> tuple[HestonParams, float]:
+                     max_evals: int = 200, prior_strength: float = 0.3) -> tuple[HestonParams, float]:
     """Fit Heston to market IVs at one expiry by least squares on price differences in vol units."""
     K = np.asarray(strikes, float)
     iv = np.asarray(ivs, float)
@@ -387,7 +396,7 @@ def calibrate_heston(S, T, r, q, strikes: list[float], ivs: list[float], weights
     n = len(K)
     # A weak prior keeps the fit sensible when one short expiry can't pin every parameter
     # (long-run vol near ATM vol, moderate mean reversion). It is ~1/sqrt(n) as strong as the data.
-    prior = 0.3 / math.sqrt(max(n, 1))
+    prior = prior_strength / math.sqrt(max(n, 1))
 
     def fit_errors(x):
         model = heston_prices(S, K, T, r, q, kinds, HestonParams(*x))
@@ -403,7 +412,51 @@ def calibrate_heston(S, T, r, q, strikes: list[float], ivs: list[float], weights
     sol = optimize.least_squares(resid, x0, bounds=(lo, hi), max_nfev=max_evals, x_scale="jac")
     err = fit_errors(sol.x)
     rmse = float(math.sqrt(np.mean((err / np.maximum(w, 1e-9)) ** 2)))  # in vol units (decimal)
-    return HestonParams(*(float(x) for x in sol.x)), rmse
+    params = HestonParams(*(float(x) for x in sol.x))
+    params.stderr, params.identified = _heston_uncertainty(sol.jac[:n], sol.x, err, n)
+    return params, rmse
+
+
+NAMES = ("v0", "kappa", "theta", "xi", "rho")
+# A parameter counts as pinned down by the quotes if its 1-sd uncertainty is below this
+# (relative for the positive parameters, absolute for rho).
+IDENTIFIED_REL, IDENTIFIED_RHO = 0.25, 0.15
+
+
+def _heston_uncertainty(J: np.ndarray, x: np.ndarray, err: np.ndarray, n: int) -> tuple[dict, dict]:
+    """Parameter standard errors from the data alone (Gauss-Newton covariance, prior excluded).
+
+    Residuals are in vol units, so the noise level is the fit's own residual variance, floored at
+    0.1 vol point (quotes are never more precise than that). One expiry usually can't separate
+    mean reversion (kappa) from long-run variance (theta); those are reported as not identified
+    (they stay near the prior) and the other parameters' uncertainty is given with them held.
+    """
+    s2 = max(float(np.sum(err ** 2)) / max(n - len(x), 1), 0.001 ** 2)
+    # d(residual)/d(ln x) for the positive parameters, d/d(rho) for rho: comparable scales
+    Jr = np.asarray(J, float) * np.array([x[0], x[1], x[2], x[3], 1.0])
+
+    def sds(cols: list[int]) -> dict[int, float]:
+        A = Jr[:, cols]
+        F = A.T @ A / s2
+        F = F + np.eye(len(cols)) * 1e-9 * max(float(np.trace(F)), 1e-12)
+        try:
+            d = np.diag(np.linalg.inv(F))
+        except np.linalg.LinAlgError:
+            d = np.full(len(cols), np.inf)
+        return {c: float(np.sqrt(max(v, 0.0))) for c, v in zip(cols, d)}
+
+    def ok(i: int, sd: float) -> bool:
+        return sd < (IDENTIFIED_RHO if NAMES[i] == "rho" else IDENTIFIED_REL)
+
+    full = sds(list(range(len(x))))
+    held = [i for i in (1, 2) if not ok(i, full[i])]  # kappa / theta
+    cond = sds([i for i in range(len(x)) if i not in held]) if held else full
+    stderr, ident = {}, {}
+    for i, name in enumerate(NAMES):
+        sd = full[i] if i in held else cond[i]
+        stderr[name] = float(min(sd, 9.99)) if name == "rho" else float(x[i] * min(sd, 99.0))
+        ident[name] = i not in held and ok(i, sd)
+    return stderr, ident
 
 
 # ------------------------------------------------------------------------------------------
