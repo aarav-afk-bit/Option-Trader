@@ -75,7 +75,7 @@
   const TABS = $$(".sidebar .tab").map((t) => ({ tab: t.dataset.tab, label: t.querySelector(".lbl").textContent }));
   function commands(q) {
     const list = [
-      ...TABS.map((t, i) => ({ label: `Go to ${t.label}`, key: String(i + 1), run: () => App.switchTab(t.tab) })),
+      ...TABS.map((t, i) => ({ label: `Go to ${t.label}`, key: String((i + 1) % 10), run: () => App.switchTab(t.tab) })),
       { label: "Quick trade: answer 3 questions, get a trade", key: "Q", run: () => App.quickTrade && App.quickTrade() },
       { label: "Optimise the current strategy", key: "O", run: optimise },
       { label: "Refresh live data now", key: "R", run: () => App.loadChain(true) },
@@ -123,7 +123,7 @@
   $("#cmd-list").addEventListener("click", (e) => { const li = e.target.closest("li[data-i]"); if (li) { sel = Number(li.dataset.i); runSel(); } });
 
   function showHelp() {
-    App.showBanner("Shortcuts: 1–9 switch sections · / jump to symbol · R refresh · O optimise · T theme · [ ] side panels · Ctrl+K command palette · Esc close", "info");
+    App.showBanner("Shortcuts: 1–9, 0 switch sections · / jump to symbol · R refresh · O optimise · T theme · [ ] side panels · Ctrl+K command palette · Esc close", "info");
   }
 
   /* ---------- keyboard shortcuts ---------- */
@@ -132,7 +132,7 @@
     const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
     if (e.key === "Escape") { closeCmd(); if (App.closeQuickTrade) App.closeQuickTrade(); if (typing) document.activeElement.blur(); return; }
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
-    const n = Number(e.key);
+    const n = e.key === "0" ? 10 : Number(e.key);
     if (n >= 1 && n <= TABS.length) { App.switchTab(TABS[n - 1].tab); return; }
     switch (e.key) {
       case "/": e.preventDefault(); $("#symbol").focus(); $("#symbol").select(); break;

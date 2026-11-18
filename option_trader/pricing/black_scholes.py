@@ -6,7 +6,9 @@ Conventions:
   ``sigma`` is annualised volatility as a decimal.
 * ``theta`` is per calendar day, ``vega`` and ``rho`` are per 1 percentage point.
 
-NSE index and stock options are European-style, so Black-Scholes is the standard model.
+US index options (SPX, NDX, RUT...) are European. Equity and ETF options are American, but the
+market convention is still to quote their IV with Black-Scholes on the implied forward (which
+absorbs dividends); the Valuation lab adds American models and the early-exercise premium.
 """
 
 from __future__ import annotations
@@ -104,7 +106,7 @@ def enrich_chain(chain: OptionChain, r: float, now: Optional[datetime] = None) -
     """Compute IV and Greeks for every priced contract from its live price.
 
     Pricing uses the market-implied forward (put-call parity) as the underlying, which is how
-    NSE options are actually priced; this keeps IV and Greeks consistent across strikes and
+    listed options are actually priced; this keeps IV and Greeks consistent across strikes and
     correct for dividend-paying stocks. The IV a source published is kept in ``source_iv``.
     Contracts without a usable price keep the source's IV (if any) and are never estimated.
     """

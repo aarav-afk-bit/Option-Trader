@@ -128,7 +128,7 @@ def _heston_cf(u, T, r, q, S, p: HestonParams):
 _GL_X, _GL_W = np.polynomial.legendre.leggauss(256)
 
 
-def heston_prices(S, strikes, T, r, q, kinds, params: HestonParams, u_max: float = 250.0) -> np.ndarray:
+def heston_prices(S, strikes, T, r, q, kinds, params: HestonParams, u_max: Optional[float] = None) -> np.ndarray:
     """Heston prices for many strikes at one expiry.
 
     The characteristic function does not depend on the strike, so it is evaluated once on a
@@ -138,6 +138,10 @@ def heston_prices(S, strikes, T, r, q, kinds, params: HestonParams, u_max: float
     kinds = [kinds] * len(K) if isinstance(kinds, str) else list(kinds)
     if T <= 0:
         return np.array([_intrinsic(S, k, kd) for k, kd in zip(K, kinds)])
+    if u_max is None:
+        # The integrand decays like exp(-v T u^2 / 2): integrate until that is ~e^-40.
+        var = max(min(params.v0, params.theta), 1e-4)
+        u_max = min(max(250.0, math.sqrt(80.0 / (var * T))), 5000.0)
     u = 0.5 * u_max * (_GL_X + 1.0) + 1e-10
     w = 0.5 * u_max * _GL_W
     cf2 = _heston_cf(u, T, r, q, S, params)
@@ -380,17 +384,26 @@ def calibrate_heston(S, T, r, q, strikes: list[float], ivs: list[float], weights
     kinds = ["CE" if k >= S else "PE" for k in K]  # out-of-the-money side is the liquid one
     market = np.array([bsm(S, k, T, r, q, v, kd) for k, v, kd in zip(K, iv, kinds)])
 
-    def resid(x):
-        p = HestonParams(*x)
-        model = heston_prices(S, K, T, r, q, kinds, p)
+    n = len(K)
+    # A weak prior keeps the fit sensible when one short expiry can't pin every parameter
+    # (long-run vol near ATM vol, moderate mean reversion). It is ~1/sqrt(n) as strong as the data.
+    prior = 0.3 / math.sqrt(max(n, 1))
+
+    def fit_errors(x):
+        model = heston_prices(S, K, T, r, q, kinds, HestonParams(*x))
         return w * (model - market) / vegas
+
+    def resid(x):
+        penalty = [prior * (math.sqrt(x[2]) - atm) / 0.05, prior * math.log(x[1] / 2.0) / 2.0]
+        return np.concatenate([fit_errors(x), penalty])
 
     x0 = [atm ** 2, 2.0, atm ** 2, 0.6, -0.6]
     lo = [1e-4, 0.05, 1e-4, 0.01, -0.99]
     hi = [2.0, 20.0, 2.0, 3.0, 0.99]
     sol = optimize.least_squares(resid, x0, bounds=(lo, hi), max_nfev=max_evals, x_scale="jac")
-    rmse = float(math.sqrt(np.mean((sol.fun / np.maximum(w, 1e-9)) ** 2)))  # in vol units (decimal)
-    return HestonParams(*sol.x), rmse
+    err = fit_errors(sol.x)
+    rmse = float(math.sqrt(np.mean((err / np.maximum(w, 1e-9)) ** 2)))  # in vol units (decimal)
+    return HestonParams(*(float(x) for x in sol.x)), rmse
 
 
 # ------------------------------------------------------------------------------------------
