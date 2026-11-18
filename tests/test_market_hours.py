@@ -45,8 +45,8 @@ def test_parse_nse_payloads():
     assert hol == [date(2026, 10, 21)]
 
 
-def test_market_endpoint_falls_back_to_clock():
+def test_market_endpoint_uses_nyse_calendar():
     client = TestClient(create_app(manager_with(RecordedNSEProvider())))
     m = client.get("/api/market").json()
-    assert m["estimate"] is True and m["source"] == "clock"
-    assert isinstance(m["open"], bool)
+    assert m["estimate"] is False and m["source"] == "nyse-calendar"
+    assert m["open"] is True  # tests run on Thu 2026-10-15 10:00 ET

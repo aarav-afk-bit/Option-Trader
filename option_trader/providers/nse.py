@@ -133,6 +133,7 @@ def parse_chain_payload(
         fetched_at=fetched_at or utcnow(),
         exchange_timestamp=records.get("timestamp"),
         expiries=sorted(expiries),
+        currency="INR",
     )
     return chain.validate()
 

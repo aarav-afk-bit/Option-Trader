@@ -19,7 +19,7 @@ from typing import Literal, Optional
 import numpy as np
 from scipy.stats import norm
 
-from ..models import IST, NSE_EXPIRY_TIME, OptionChain
+from ..models import OptionChain, default_expiry_at
 from ..pricing.black_scholes import greeks, implied_vol
 
 LegType = Literal["CE", "PE", "FUT"]
@@ -50,7 +50,7 @@ class Leg:
             return self.expiry_at
         if self.expiry is None:
             return None
-        return datetime.combine(self.expiry, NSE_EXPIRY_TIME, tzinfo=IST)
+        return default_expiry_at(self.expiry)
 
     def to_dict(self) -> dict:
         d = asdict(self)

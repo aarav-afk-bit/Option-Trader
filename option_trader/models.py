@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal, Optional
+from zoneinfo import ZoneInfo
 
 from .errors import InvalidDataError
 
@@ -17,6 +18,18 @@ OptionType = Literal["CE", "PE"]
 
 IST = timezone(timedelta(hours=5, minutes=30))
 NSE_EXPIRY_TIME = time(15, 30)
+ET = ZoneInfo("America/New_York")
+US_EXPIRY_TIME = time(16, 0)  # US equity/ETF options and PM-settled index options
+US_AM_SETTLE_TIME = time(9, 30)  # AM-settled index options (e.g. SPX monthlies) settle at the open
+CONTRACT_MULTIPLIER = 100  # standard US equity/index option multiplier
+INDIAN_SOURCES = ("nse", "angelone")
+
+
+def default_expiry_at(expiry: date, source: str = "") -> datetime:
+    """When an expiry date's contracts stop trading: 16:00 New York for US options."""
+    if source in INDIAN_SOURCES:
+        return datetime.combine(expiry, NSE_EXPIRY_TIME, tzinfo=IST)
+    return datetime.combine(expiry, US_EXPIRY_TIME, tzinfo=ET)
 
 
 @dataclass
@@ -110,7 +123,7 @@ class OptionChain:
     exchange_timestamp: Optional[str] = None
     lot_size: Optional[int] = None
     expiries: list[date] = field(default_factory=list)
-    currency: str = "INR"
+    currency: str = "USD"
     notes: list[str] = field(default_factory=list)
     # Exact expiry moment when it differs from NSE's 15:30 IST close (e.g. US options).
     expiry_at: Optional[datetime] = None
@@ -128,6 +141,8 @@ class OptionChain:
 
     def __post_init__(self) -> None:
         self.rows.sort(key=lambda r: r.strike)
+        if self.expiry_at is None:
+            self.expiry_at = default_expiry_at(self.expiry, self.source)
 
     @property
     def strikes(self) -> list[float]:
@@ -161,15 +176,16 @@ class OptionChain:
     def expiry_datetime(self) -> datetime:
         if self.expiry_at is not None:
             return self.expiry_at
-        return datetime.combine(self.expiry, NSE_EXPIRY_TIME, tzinfo=IST)
+        return default_expiry_at(self.expiry, self.source)
 
     def exchange_time(self) -> Optional[datetime]:
         """Exchange timestamp of the snapshot (e.g. NSE's '14-Oct-2026 15:30:00', IST)."""
         if not self.exchange_timestamp:
             return None
-        for fmt in ("%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        tz = IST if self.source in INDIAN_SOURCES else ET
+        for fmt in ("%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
             try:
-                return datetime.strptime(self.exchange_timestamp.strip(), fmt).replace(tzinfo=IST)
+                return datetime.strptime(self.exchange_timestamp.strip(), fmt).replace(tzinfo=tz)
             except ValueError:
                 continue
         return None

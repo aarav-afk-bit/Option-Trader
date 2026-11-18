@@ -21,10 +21,32 @@ INDEX_ALIASES = {
 }
 NSE_INDICES = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50"}
 
+# US cash-settled, European-style index options (the rest are American-style equity/ETF options).
+US_INDEX_ALIASES = {
+    "SPX": "SPX", "$SPX": "SPX", "^SPX": "SPX", "^GSPC": "SPX", "SPXW": "SPX", ".SPX": "SPX",
+    "XSP": "XSP", "$XSP": "XSP", "^XSP": "XSP",
+    "NDX": "NDX", "$NDX": "NDX", "^NDX": "NDX", "NDXP": "NDX",
+    "RUT": "RUT", "$RUT": "RUT", "^RUT": "RUT", "RUTW": "RUT",
+    "VIX": "VIX", "$VIX": "VIX", "^VIX": "VIX", "VIXW": "VIX",
+    "DJX": "DJX", "$DJX": "DJX", "OEX": "OEX", "XEO": "XEO",
+}
+US_INDICES = set(US_INDEX_ALIASES.values())
+
 
 def normalize_symbol(symbol: str) -> str:
-    s = symbol.strip().upper()
-    return INDEX_ALIASES.get(s, s)
+    s = symbol.strip().upper().replace("/", ".")
+    if s.startswith("US:"):
+        s = s[3:].strip()
+    return US_INDEX_ALIASES.get(s) or INDEX_ALIASES.get(s, s)
+
+
+def is_us_index(symbol: str) -> bool:
+    return normalize_symbol(symbol) in US_INDICES
+
+
+def exercise_style(symbol: str) -> str:
+    """US index options are European; equity and ETF options are American."""
+    return "european" if is_us_index(symbol) else "american"
 
 
 def is_index(symbol: str) -> bool:
