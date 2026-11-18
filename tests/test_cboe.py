@@ -101,4 +101,5 @@ def test_manager_uses_cboe_by_default(monkeypatch):
 
     monkeypatch.delenv("OPTION_TRADER_PROVIDERS", raising=False)
     m = ProviderManager.from_settings()
-    assert [p.name for p in m.providers] == ["cboe", "yahoo"]
+    assert [p.name for p in m.providers] == ["tradier", "cboe", "yahoo"]
+    assert not m.providers[0].is_configured()  # no token: skipped, Cboe serves
