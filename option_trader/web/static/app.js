@@ -172,7 +172,7 @@ function startStream() {
       return;
     }
     const fresh = st.last_tick_at && Date.now() - new Date(st.last_tick_at).getTime() < 60000;
-    if (st.connected && fresh) setLiveBadge("live", `Angel One feed · ${st.subscribed_tokens} contracts · last tick ${new Date(st.last_tick_at).toLocaleTimeString()}`);
+    if (st.connected && fresh) setLiveBadge("live", `${(st.feed || "live").replace(/^./, (c) => c.toUpperCase())} feed · ${st.subscribed_tokens} symbols · last tick ${new Date(st.last_tick_at).toLocaleTimeString()}`);
     else if (st.connected) setLiveBadge("connecting", "Connected; waiting for ticks (none arrive while the market is closed)");
     else setLiveBadge("off", st.error ? `Feed error: ${st.error}` : "Live feed disconnected; retrying");
   });
@@ -618,7 +618,7 @@ async function refreshMarket() {
     badge.textContent = label + (m.estimate ? " (est.)" : "");
     badge.className = "pill " + (m.open ? "bullish" : "bearish");
     const next = m.next_open ? ` · opens ${new Date(m.next_open).toLocaleString()}` : "";
-    badge.title = `${m.message || m.state}${next}${m.estimate ? " · estimated from the clock" : " · from NSE"}`;
+    badge.title = `${m.message || m.state}${next}${m.estimate ? " · estimated from the clock" : " · NYSE calendar"}`;
   } catch (e) {
     badge.textContent = "Market ?";
     badge.className = "pill neutral";

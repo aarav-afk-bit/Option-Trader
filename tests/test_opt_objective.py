@@ -11,7 +11,7 @@ from option_trader.optimizer.distribution import lognormal
 from option_trader.optimizer.objective import Preferences, evaluate, score
 from option_trader.strategy.engine import Leg, Strategy
 
-from .helpers import RecordedNSEProvider, manager_with, trending_candles
+from .helpers import RecordedProvider, manager_with, trending_candles
 
 NOW = datetime(2026, 10, 14, 4, 0, tzinfo=timezone.utc)
 EXP = date(2026, 10, 27)
@@ -75,7 +75,7 @@ def test_win_weight_moves_score_between_goals():
 
 
 def test_build_distribution_from_chain_and_realised():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     from option_trader.pricing import enrich_chain
 
     enrich_chain(ch, 0.065)
@@ -90,8 +90,8 @@ def test_build_distribution_from_chain_and_realised():
 
 
 def test_score_endpoint():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    r = client.post("/api/strategy/score", json={"symbol": "NIFTY", "legs": [
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    r = client.post("/api/strategy/score", json={"symbol": "NDX", "legs": [
         {"option_type": "CE", "action": "BUY", "strike": 25000},
         {"option_type": "CE", "action": "SELL", "strike": 25100}], "prefs": {"win_weight": 0.7}})
     assert r.status_code == 200, r.text

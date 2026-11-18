@@ -4,7 +4,7 @@ import pytest
 
 from option_trader.errors import InvalidDataError
 from option_trader.models import OptionChain, OptionQuote, StrikeRow
-from option_trader.providers.base import is_index, normalize_symbol
+from option_trader.providers.base import is_us_index, normalize_symbol
 
 EXP = date(2026, 10, 27)
 
@@ -17,7 +17,7 @@ def _row(k, c_ltp=None, p_ltp=None, oi=None):
     )
 
 
-def _chain(rows, spot=100.0, source="nse"):
+def _chain(rows, spot=100.0, source="cboe"):
     return OptionChain("TEST", EXP, spot, rows, source, datetime.now(timezone.utc))
 
 
@@ -52,6 +52,6 @@ def test_years_to_expiry_never_negative():
 
 
 def test_symbol_normalisation():
-    assert normalize_symbol(" nifty50 ") == "NIFTY"
-    assert is_index("banknifty")
-    assert not is_index("RELIANCE")
+    assert normalize_symbol(" ^gspc ") == "SPX"
+    assert is_us_index("$ndx")
+    assert not is_us_index("AAPL")

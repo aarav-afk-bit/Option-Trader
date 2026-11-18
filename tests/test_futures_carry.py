@@ -18,7 +18,7 @@ ZERO = ChargeRates(0, 0, 0, 0, 0, 0)
 def chain(r=0.065):
     now = datetime.now(timezone.utc)
     exp = (now + timedelta(days=21)).date()
-    ch = OptionChain("NIFTY", exp, 25000.0, [], "test", now, lot_size=75)
+    ch = OptionChain("NDX", exp, 25000.0, [], "test", now, lot_size=75)
     t = ch.years_to_expiry(now)
     ch.rows = [StrikeRow(float(k), OptionQuote(k, "CE", exp, ltp=bs_price(25000, k, t, r, 0.14, "CE")),
                          OptionQuote(k, "PE", exp, ltp=bs_price(25000, k, t, r, 0.14, "PE")))

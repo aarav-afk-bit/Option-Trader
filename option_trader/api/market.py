@@ -40,7 +40,7 @@ def verify(symbol: str, expiry: Optional[str] = None, source: Optional[str] = No
     other = pick_secondary(manager, primary.source)
     if other is None:
         return {"available": False, "primary": primary.source,
-                "reason": "Cross-checking needs a second source: configure Angel One (or NSE) as well."}
+                "reason": "Cross-checking needs a second source: enable Cboe, Tradier or Yahoo as well."}
     try:
         secondary = manager.get_chain(symbol, primary.expiry, other)
     except DataUnavailableError as exc:
@@ -105,8 +105,8 @@ async def stream(request: Request, symbol: str, expiry: Optional[str] = None, so
 
     async def events():
         if manager.live is None:
-            reason = ("Live ticks need Angel One credentials (ANGEL_API_KEY, ANGEL_CLIENT_CODE, ANGEL_PIN, "
-                      "ANGEL_TOTP_SECRET). Showing polled snapshots instead.")
+            reason = ("Real-time ticks need a Tradier production API token (Settings page). "
+                      "Showing refreshed snapshots instead.")
             yield f"event: status\ndata: {json.dumps({'live': False, 'reason': reason})}\n\n"
             return
         last_version, last_beat = -1, 0.0

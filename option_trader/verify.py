@@ -1,8 +1,9 @@
 """Cross-source verification: compare the same chain from two independent sources.
 
-NSE's website and Angel One's feed are separate pipes from the same exchange. When both are
-configured, comparing them strike by strike catches problems neither can reveal alone (a
-stuck feed, a parsing error, a stale snapshot). Prices are compared within a tolerance that
+Cboe's delayed quotes and Tradier's feed are separate pipes from the same OPRA market data.
+When both are available, comparing them strike by strike catches problems neither can reveal
+alone (a stuck feed, a parsing error, a stale snapshot). Note Cboe is ~15 minutes delayed, so
+during fast markets some disagreement is expected; the tolerance allows for spreads only. Prices are compared within a tolerance that
 allows for the bid/ask spread, the tick size and the few seconds between the two snapshots.
 """
 
@@ -69,8 +70,9 @@ def compare(primary: OptionChain, secondary: OptionChain, mark: bool = True) -> 
 
 
 def pick_secondary(manager, primary_source: str) -> Optional[str]:
-    """Another configured source that can provide the same NSE chain (Yahoo has none)."""
-    for p in manager.providers:
-        if p.name not in (primary_source, "yahoo") and p.is_configured():
+    """Another configured source for the same chain (Cboe/Tradier preferred over Yahoo)."""
+    ranked = sorted(manager.providers, key=lambda p: p.name == "yahoo")
+    for p in ranked:
+        if p.name != primary_source and p.is_configured():
             return p.name
     return None

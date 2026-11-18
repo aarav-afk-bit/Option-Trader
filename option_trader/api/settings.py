@@ -46,20 +46,14 @@ def get_settings_view() -> dict:
         "stale_seconds": s.stale_seconds,
         "live_ticks": s.live_ticks,
         "charges": {k: os.getenv(k, "") for k in sorted(config.EDITABLE_KEYS) if "BROKERAGE" in k or k.endswith(("STT_SELL", "EXCHANGE_TXN", "SEBI_FEE", "STAMP_BUY", "GST"))},
-        "angel": {
-            "configured": s.angel_configured,
-            "api_key": _mask(s.angel_api_key), "client_code": _mask(s.angel_client_code),
-            "pin": "••••" if s.angel_pin else "", "totp_secret": "••••" if s.angel_totp_secret else "",
-        },
+        "tradier": {"configured": s.tradier_configured, "token": _mask(s.tradier_token), "sandbox": s.tradier_sandbox},
         "data_dir": str(s.data_dir),
     }
 
 
-class AngelIn(BaseModel):
-    api_key: Optional[str] = None
-    client_code: Optional[str] = None
-    pin: Optional[str] = None
-    totp_secret: Optional[str] = None
+class TradierIn(BaseModel):
+    token: Optional[str] = None
+    sandbox: Optional[bool] = None
     clear: bool = False
 
 
@@ -70,7 +64,7 @@ class SettingsIn(BaseModel):
     stale_seconds: Optional[float] = None
     live_ticks: Optional[bool] = None
     charges: Optional[dict[str, str]] = None
-    angel: Optional[AngelIn] = None
+    tradier: Optional[TradierIn] = None
 
 
 def _rebuild_manager(request: Request) -> None:
@@ -115,16 +109,13 @@ def save(body: SettingsIn, request: Request) -> dict:
             except ValueError as exc:
                 raise HTTPException(422, f"{k} must be a non-negative number") from exc
         values[k] = v
-    if body.angel:
-        if body.angel.clear:
+    if body.tradier:
+        if body.tradier.clear:
             secrets = {k: "" for k in config.SECRET_KEYS}
-        else:
-            mapping = {"api_key": "ANGEL_API_KEY", "client_code": "ANGEL_CLIENT_CODE",
-                       "pin": "ANGEL_PIN", "totp_secret": "ANGEL_TOTP_SECRET"}
-            for f, key in mapping.items():
-                v = getattr(body.angel, f)
-                if v:  # blank fields keep the saved value
-                    secrets[key] = v.strip().replace(" ", "") if f == "totp_secret" else v.strip()
+        elif body.tradier.token:  # blank keeps the saved token
+            secrets["TRADIER_TOKEN"] = body.tradier.token.strip()
+        if body.tradier.sandbox is not None:
+            values["TRADIER_SANDBOX"] = "1" if body.tradier.sandbox else "0"
     try:
         config.save_settings(values, secrets)
     except ValueError as exc:
@@ -138,11 +129,10 @@ ADVICE = [
     ("*", "proxy", "A proxy or firewall on this network is blocking the connection. Try a different network (home/mobile internet) or ask your network admin to allow the site."),
     ("*", "tunnel", "A proxy or firewall on this network is blocking the connection. Try a different network (home/mobile internet) or ask your network admin to allow the site."),
     ("*", "No internet", "This computer appears to be offline."),
-    ("Angel One", "credentials missing", "Enter your Angel One API key, client code, PIN and TOTP secret above."),
-    ("Angel One", "totp", "Angel One rejected the one-time code. Check the TOTP secret (the text code shown when you enabled TOTP) and that your computer's clock is correct."),
-    ("Angel One", "invalid", "Angel One rejected the login. Check the client code, PIN and API key."),
-    ("NSE", "403", "NSE refused the request. NSE blocks many VPNs, cloud servers and some networks: try your normal home or mobile internet, or add Angel One as a source."),
-    ("NSE", "non-JSON", "NSE returned a web page instead of data (bot protection). Wait a minute and retry, or use Angel One."),
+    ("Tradier", "token missing", "Optional: paste a Tradier API token above for real-time prices (free with a Tradier brokerage account; a developer sandbox token gives delayed data)."),
+    ("Tradier", "rejected the token", "Tradier rejected the token. Check it was copied fully, and tick Sandbox only for a sandbox token."),
+    ("Cboe", "check the symbol", "Cboe has no options for that symbol. Check the ticker."),
+    ("Cboe", "non-JSON", "Cboe returned a web page instead of data. Wait a minute and retry."),
     ("*", "Cannot reach", "The site could not be reached. Check your internet connection, firewall or proxy."),
     ("*", "timed out", "The site is slow or unreachable right now. Retry in a minute."),
 ]
@@ -168,9 +158,9 @@ def _timed(name: str, fn) -> dict:
 
 @router.post("/test")
 def test_connections(request: Request) -> dict:
-    from ..providers.angelone import AngelOneProvider
+    from ..providers.cboe import CboeProvider
     from ..providers.manager import check_online
-    from ..providers.nse import NSEProvider
+    from ..providers.tradier import TradierProvider
     from ..providers.yahoo import YahooProvider
 
     s = config.get_settings()
@@ -180,21 +170,22 @@ def test_connections(request: Request) -> dict:
             raise DataUnavailableError("No internet connection")
         return "online"
 
-    def nse():
-        exps = NSEProvider().get_expiries("NIFTY")
-        return f"NIFTY expiries: {len(exps)} (next {exps[0]})"
+    def cboe():
+        exps = CboeProvider().get_expiries("SPY")
+        return f"SPY expiries: {len(exps)} (next {exps[0]}), ~15 min delayed"
 
-    def angel():
-        p = AngelOneProvider(s)
+    def tradier():
+        p = TradierProvider.from_settings(s)
         if not p.is_configured():
-            raise DataUnavailableError("Angel One credentials missing")
-        return f"logged in; NIFTY {p.get_spot('NIFTY'):,.2f}"
+            raise DataUnavailableError("Tradier token missing")
+        q = p.get_quote("SPY")
+        return f"SPY {q['last']:,.2f} ({'sandbox, delayed' if p.sandbox else 'real-time'})"
 
     def yahoo():
-        c = YahooProvider().get_history("NIFTY", "5d", "1d")
+        c = YahooProvider().get_history("SPY", "5d", "1d")
         return f"{len(c)} daily candles, last close {c[-1].close:,.2f}"
 
-    checks = [("Internet", internet), ("NSE", nse), ("Angel One", angel), ("Yahoo Finance", yahoo)]
+    checks = [("Internet", internet), ("Cboe", cboe), ("Tradier", tradier), ("Yahoo Finance", yahoo)]
     with ThreadPoolExecutor(4) as pool:
         results = list(pool.map(lambda c: _timed(*c), checks))
     return {"results": results}

@@ -1,7 +1,7 @@
-"""Live index levels and day moves (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, India VIX).
+"""Live US index levels and day moves: S&P 500, Nasdaq-100, Dow, Russell 2000 and the VIX.
 
-Primary source is NSE's ``/api/allIndices``; Yahoo Finance is the fallback. When the Angel
-One tick stream is running, the index levels it streams replace the snapshot values.
+Primary source is Cboe's delayed quotes; Yahoo Finance is the fallback. When the Tradier
+stream is running, its real-time index prints replace the snapshot values.
 """
 
 from __future__ import annotations
@@ -14,13 +14,13 @@ from .models import utcnow
 
 log = logging.getLogger(__name__)
 
-# (display name, NSE allIndices name, Yahoo ticker, option symbol or None, Angel NSE token)
+# (display name, option symbol (or None), Cboe symbol (or None), Yahoo ticker, stream symbol)
 INDEX_SPECS = [
-    ("NIFTY 50", "NIFTY 50", "^NSEI", "NIFTY", "99926000"),
-    ("NIFTY BANK", "NIFTY BANK", "^NSEBANK", "BANKNIFTY", "99926009"),
-    ("FIN NIFTY", "NIFTY FINANCIAL SERVICES", "NIFTY_FIN_SERVICE.NS", "FINNIFTY", "99926037"),
-    ("MIDCAP SELECT", "NIFTY MIDCAP SELECT", "NIFTY_MID_SELECT.NS", "MIDCPNIFTY", "99926074"),
-    ("INDIA VIX", "INDIA VIX", "^INDIAVIX", None, None),
+    ("S&P 500", "SPX", "SPX", "^GSPC", "SPX"),
+    ("NASDAQ 100", "NDX", "NDX", "^NDX", "NDX"),
+    ("DOW JONES", None, None, "^DJI", None),
+    ("RUSSELL 2000", "RUT", "RUT", "^RUT", "RUT"),
+    ("VIX", "VIX", "VIX", "^VIX", "VIX"),
 ]
 
 
@@ -34,27 +34,20 @@ def _row(name, symbol, last, prev, high=None, low=None, source="", ts=None, toke
     }
 
 
-def parse_all_indices(payload: dict) -> list[dict]:
-    by_name = {str(d.get("index", "")).upper(): d for d in payload.get("data") or []}
+def fetch_from_cboe(cboe) -> list[dict]:
     out = []
-    for name, nse_name, _y, sym, token in INDEX_SPECS:
-        d = by_name.get(nse_name)
-        if not d:
+    for name, sym, csym, _y, tok in INDEX_SPECS:
+        if not csym:
             continue
         try:
-            last = float(d["last"])
-            prev = float(d.get("previousClose") or 0) or None
-        except (KeyError, TypeError, ValueError):
+            q = cboe.get_quote(csym)
+        except DataUnavailableError as exc:
+            log.info("Cboe quote %s unavailable: %s", csym, exc)
             continue
-        out.append(_row(name, sym, last, prev, d.get("high"), d.get("low"), "nse", payload.get("timestamp"), token))
+        out.append(_row(name, sym, q["last"], q["prev_close"], q["high"], q["low"], "cboe", utcnow().isoformat(), tok))
+    if not out:
+        raise DataUnavailableError("Cboe returned none of the tracked indices")
     return out
-
-
-def fetch_from_nse(nse) -> list[dict]:
-    rows = parse_all_indices(nse._get_json("/api/allIndices"))
-    if not rows:
-        raise DataUnavailableError("NSE allIndices returned none of the tracked indices")
-    return rows
 
 
 def fetch_from_yahoo(ticker_factory=None) -> list[dict]:
@@ -63,7 +56,7 @@ def fetch_from_yahoo(ticker_factory=None) -> list[dict]:
 
         ticker_factory = yf.Ticker
     out = []
-    for name, _n, ysym, sym, token in INDEX_SPECS:
+    for name, sym, _c, ysym, tok in INDEX_SPECS:
         try:
             fi = ticker_factory(ysym).fast_info
             last, prev = float(fi["last_price"]), float(fi["previous_close"])
@@ -71,23 +64,30 @@ def fetch_from_yahoo(ticker_factory=None) -> list[dict]:
         except Exception as exc:
             log.info("Yahoo index %s unavailable: %s", ysym, exc)
             continue
-        out.append(_row(name, sym, last, prev, high, low, "yahoo", utcnow().isoformat(), token))
+        out.append(_row(name, sym, last, prev, high, low, "yahoo", utcnow().isoformat(), tok))
     if not out:
         raise DataUnavailableError("Yahoo Finance returned no index levels")
     return out
 
 
 def overlay_ticks(rows: list[dict], stream) -> None:
-    """Replace levels with streamed ticks where available (keeps prev close for the change)."""
+    """Replace levels with streamed prints where available (keeps prev close for the change)."""
     if stream is None:
         return
     for r in rows:
         t = stream.tick(r["token"]) if r.get("token") else None
         if t and t.get("ltp"):
             prev = r["prev_close"] or t.get("close")
-            fresh = _row(r["name"], r["symbol"], t["ltp"], prev, t.get("high") or r["high"],
-                         t.get("low") or r["low"], r["source"] + "+ticks", r["timestamp"], r["token"])
-            r.update(fresh)
+            r.update(_row(r["name"], r["symbol"], t["ltp"], prev, r["high"], r["low"],
+                          r["source"] + "+ticks", r["timestamp"], r["token"]))
+
+
+def merge(primary: list[dict], extra: list[dict]) -> list[dict]:
+    """Primary rows, plus any index only the other source has (e.g. the Dow from Yahoo), in spec order."""
+    names = {r["name"] for r in primary}
+    rows = primary + [r for r in extra if r["name"] not in names]
+    order = {spec[0]: i for i, spec in enumerate(INDEX_SPECS)}
+    return sorted(rows, key=lambda r: order.get(r["name"], 99))
 
 
 def get_indices(manager) -> dict:
@@ -97,27 +97,25 @@ def get_indices(manager) -> dict:
     else:
         if not manager.is_online():
             raise DataUnavailableError("No internet connection: index levels unavailable")
-        nse = next((p for p in manager.providers if p.name == "nse"), None)
+        cboe = next((p for p in manager.providers if p.name == "cboe"), None)
         errors = []
         rows: Optional[list[dict]] = None
-        if nse is not None and hasattr(nse, "_get_json"):
+        if cboe is not None and hasattr(cboe, "get_quote"):
             try:
-                rows = fetch_from_nse(nse)
+                rows = fetch_from_cboe(cboe)
             except DataUnavailableError as exc:
-                errors.append(f"nse: {exc}")
-        if rows is None:
-            try:
-                rows = fetch_from_yahoo()
-            except DataUnavailableError as exc:
-                errors.append(f"yahoo: {exc}")
-        if rows is None:
+                errors.append(f"cboe: {exc}")
+        try:
+            yahoo_rows = fetch_from_yahoo()
+            rows = merge(rows, yahoo_rows) if rows else yahoo_rows
+        except DataUnavailableError as exc:
+            errors.append(f"yahoo: {exc}")
+        if not rows:
             raise DataUnavailableError("Index levels unavailable. " + " | ".join(errors))
         manager._store(("indices",), rows)
         rows = [dict(r) for r in rows]
     live = getattr(manager, "live", None)
     if live is not None:
-        from .providers.angel_stream import EXCHANGE_NSE_CM
-
-        live.stream.subscribe(EXCHANGE_NSE_CM, [r["token"] for r in rows if r.get("token")])
+        live.stream.subscribe([r["token"] for r in rows if r.get("token")])
         overlay_ticks(rows, live.stream)
     return {"indices": rows, "fetched_at": utcnow().isoformat()}

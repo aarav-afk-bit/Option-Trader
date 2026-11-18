@@ -5,7 +5,7 @@ from option_trader.app import create_app
 from option_trader.charges import ChargeRates, Fill, order_charges, strategy_costs
 from option_trader.portfolio.store import PortfolioStore
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 R = ChargeRates(brokerage_per_order=20, stt_sell=0.001, exchange_txn=0.0003503, sebi=0.000001,
                 stamp_buy=0.00003, gst=0.18)
@@ -39,8 +39,8 @@ def test_strategy_costs_round_trip_and_slippage():
 
 
 def test_analyze_returns_net_figures():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    res = client.post("/api/strategy/analyze", json={"symbol": "NIFTY", "legs": [
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    res = client.post("/api/strategy/analyze", json={"symbol": "NDX", "legs": [
         {"option_type": "CE", "action": "BUY", "strike": 25000},
         {"option_type": "CE", "action": "SELL", "strike": 25100}]}).json()
     c = res["costs"]
@@ -50,7 +50,7 @@ def test_analyze_returns_net_figures():
 
 def test_portfolio_net_pnl(tmp_path):
     st = PortfolioStore(tmp_path / "p.json")
-    chain_for = lambda exp=None: RecordedNSEProvider().get_option_chain("NIFTY", exp)
+    chain_for = lambda exp=None: RecordedProvider().get_option_chain("NDX", exp)
     pos = st.open("S", chain_for, [{"option_type": "CE", "action": "BUY", "strike": 25000}])
     assert pos["entry_charges"]["total"] > 20
     from option_trader.portfolio.store import mark_to_market

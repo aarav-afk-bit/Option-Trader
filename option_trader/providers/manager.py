@@ -26,7 +26,7 @@ from .base import DataProvider, normalize_symbol
 
 log = logging.getLogger(__name__)
 
-CONNECTIVITY_HOSTS = (("www.nseindia.com", 443), ("query1.finance.yahoo.com", 443), ("1.1.1.1", 443))
+CONNECTIVITY_HOSTS = (("cdn.cboe.com", 443), ("query1.finance.yahoo.com", 443), ("1.1.1.1", 443))
 
 
 def check_online(timeout: float = 3.0) -> bool:
@@ -77,38 +77,25 @@ class ProviderManager:
 
     @classmethod
     def from_settings(cls, settings: Optional[Settings] = None) -> "ProviderManager":
-        from .angelone import AngelOneProvider
         from .cboe import CboeProvider
-        from .nse import NSEProvider
+        from .tradier import TradierProvider
         from .yahoo import YahooProvider
 
         settings = settings or get_settings()
-        from .tradier import TradierProvider
-
         factories = {
-            "cboe": CboeProvider,
             "tradier": lambda: TradierProvider.from_settings(settings),
-            "nse": NSEProvider,
+            "cboe": CboeProvider,
             "yahoo": YahooProvider,
-            "angelone": lambda: AngelOneProvider(settings),
         }
         mgr = cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
                   risk_free_rate=settings.risk_free_rate, stale_seconds=settings.stale_seconds)
         tradier = next((p for p in mgr.providers if p.name == "tradier" and p.is_configured()), None)
         if tradier is None and settings.tradier_configured:
-            tradier = TradierProvider.from_settings(settings)
+            tradier = TradierProvider.from_settings(settings)  # stream even if not a snapshot source
         if tradier is not None and settings.live_ticks and not tradier.sandbox:
             from ..live import TradierLiveHub
 
             mgr.live = TradierLiveHub(tradier, risk_free_rate=settings.risk_free_rate)
-            return mgr
-        angel = next((p for p in mgr.providers if p.name == "angelone" and p.is_configured()), None)
-        if angel is None and settings.angel_configured:
-            angel = AngelOneProvider(settings)  # stream ticks even if Angel isn't a snapshot source
-        if angel is not None and settings.live_ticks:
-            from ..live import LiveHub
-
-            mgr.live = LiveHub(angel, risk_free_rate=settings.risk_free_rate)
         return mgr
 
     # -- helpers ----------------------------------------------------------------------------
@@ -171,7 +158,7 @@ class ProviderManager:
         """Run ``fn`` once for concurrent callers asking for the same ``key``.
 
         Several browser tabs/panels refreshing at once share one upstream request instead of
-        each hitting NSE/Angel (which rate-limit aggressively).
+        each hitting the data source (which rate-limit aggressively).
         """
         with self._lock:
             fut = self._inflight.get(key)
@@ -287,9 +274,9 @@ class ProviderManager:
     def _is_fresh(self, chain) -> bool:
         """During market hours, reject snapshots older than ``stale_seconds`` so the next source
         is tried. Outside market hours last-traded prices are the current prices."""
-        from ..market_hours import clock_session
+        from ..market_hours import us_session
 
-        if not clock_session(utcnow())["open"]:
+        if not us_session(utcnow())["open"]:
             return True
         age = chain.data_age_seconds()
         return age is None or age <= self.stale_seconds

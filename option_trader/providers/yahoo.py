@@ -1,15 +1,11 @@
 """Yahoo Finance provider (via the ``yfinance`` package).
 
-Yahoo publishes option chains for US-listed underlyings; for NSE symbols it usually has
-spot prices and history but no options, in which case this provider raises
-``DataUnavailableError`` and the manager moves on to the next source.
+Yahoo publishes option chains for US-listed stocks, ETFs and indices (delayed), plus spot
+prices and daily history used for the technical indicators.
 
-Symbol mapping:
-
-* NSE indices map to Yahoo index tickers (``NIFTY`` -> ``^NSEI``).
-* Bare NSE symbols get the ``.NS`` suffix (``RELIANCE`` -> ``RELIANCE.NS``).
-* Anything with an explicit suffix/prefix (``^``, ``.``, ``=``) is used as-is.
-* ``US:AAPL`` forces a US ticker (``AAPL``).
+Symbol mapping: US index symbols map to Yahoo's index tickers (``SPX`` -> ``^SPX``,
+``NDX`` -> ``^NDX``, ``VIX`` -> ``^VIX``, ``RUT`` -> ``^RUT``); class shares use a dash
+(``BRK.B`` -> ``BRK-B``); anything already starting with ``^`` is used as-is.
 """
 
 from __future__ import annotations
@@ -18,34 +14,23 @@ import logging
 import math
 from datetime import date, datetime, time, timezone
 from typing import Any, Callable, Optional
-from zoneinfo import ZoneInfo
 
 from ..errors import DataUnavailableError
-from ..models import Candle, OptionChain, OptionQuote, StrikeRow, utcnow
+from ..models import CONTRACT_MULTIPLIER, Candle, OptionChain, OptionQuote, StrikeRow, utcnow
 from .base import DataProvider, normalize_symbol
 
 log = logging.getLogger(__name__)
 
-YAHOO_INDEX_MAP = {
-    "NIFTY": "^NSEI",
-    "BANKNIFTY": "^NSEBANK",
-    "FINNIFTY": "NIFTY_FIN_SERVICE.NS",
-    "MIDCPNIFTY": "NIFTY_MID_SELECT.NS",
-    "NIFTYNXT50": "^NSMIDCP",
-    "SENSEX": "^BSESN",
-}
-US_CLOSE = time(16, 0)
-NEW_YORK = ZoneInfo("America/New_York")
+YAHOO_INDEX_MAP = {"SPX": "^SPX", "NDX": "^NDX", "RUT": "^RUT", "VIX": "^VIX", "XSP": "^XSP", "DJX": "^DJX",
+                   "OEX": "^OEX", "XEO": "^XEO"}
 
 
 def yahoo_symbol(symbol: str) -> str:
-    raw = symbol.strip()
-    if raw.upper().startswith("US:"):
-        return raw[3:].strip().upper()
-    if any(ch in raw for ch in "^.="):
-        return raw.upper()
+    raw = symbol.strip().upper()
+    if raw.startswith("^"):
+        return raw
     sym = normalize_symbol(raw)
-    return YAHOO_INDEX_MAP.get(sym, f"{sym}.NS")
+    return YAHOO_INDEX_MAP.get(sym, sym.replace(".", "-"))
 
 
 def _clean(v: Any) -> Optional[float]:
@@ -148,9 +133,8 @@ class YahooProvider(DataProvider):
                 else:
                     row.put = q
 
-        is_nse = ysym.endswith(".NS") or ysym.startswith("^NSE")
         chain = OptionChain(
-            symbol=ysym,
+            symbol=normalize_symbol(symbol),
             expiry=expiry,
             spot=self.get_spot(symbol),
             rows=list(rows.values()),
@@ -158,8 +142,7 @@ class YahooProvider(DataProvider):
             fetched_at=utcnow(),
             expiries=expiries,
             currency=currency,
-            lot_size=None if is_nse else 100,
-            expiry_at=None if is_nse else datetime.combine(expiry, US_CLOSE, tzinfo=NEW_YORK),
+            lot_size=CONTRACT_MULTIPLIER,
             notes=["Yahoo Finance quotes can be delayed by 15 minutes or more"],
         )
         return chain.validate()

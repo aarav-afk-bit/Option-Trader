@@ -14,7 +14,7 @@ from option_trader.optimizer.objective import evaluate
 from option_trader.pricing import bs_price, enrich_chain
 from option_trader.strategy.engine import Strategy, leg_from_chain
 
-from .helpers import RecordedNSEProvider, manager_with, trending_candles
+from .helpers import RecordedProvider, manager_with, trending_candles
 
 ZERO = ChargeRates(0, 0, 0, 0, 0, 0)
 
@@ -75,7 +75,7 @@ def test_needs_enough_quotes():
 
 
 def test_auto_view_from_signals_and_realised_vol():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     enrich_chain(ch, 0.065)
     v = auto_view(ch, trending_candles(drift=0.004))
     assert v["vol_source"] == "realised" and v["reasons"]
@@ -86,10 +86,10 @@ def test_auto_view_from_signals_and_realised_vol():
 
 
 def test_optimize_endpoint_with_implied_and_auto():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider(trending_candles()))))
+    client = TestClient(create_app(manager_with(RecordedProvider(trending_candles()))))
     for mode in ("implied", "auto"):
         r = client.post("/api/strategy/optimize", json={
-            "symbol": "NIFTY", "legs": [{"option_type": "CE", "action": "BUY", "strike": 25000}],
+            "symbol": "NDX", "legs": [{"option_type": "CE", "action": "BUY", "strike": 25000}],
             "distribution": {"mode": mode}})
         assert r.status_code == 200, (mode, r.text)
         assert r.json()["distribution"]["kind"] == mode

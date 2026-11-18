@@ -5,7 +5,7 @@ import pytest
 
 from option_trader.pricing import bs_price, enrich_chain, greeks, implied_vol
 
-from .helpers import RecordedNSEProvider
+from .helpers import RecordedProvider
 
 
 def test_textbook_values():
@@ -47,7 +47,7 @@ def test_implied_vol_roundtrip_and_bounds():
 
 
 def test_enrich_recomputes_iv_and_keeps_source_iv():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     src_iv = ch.quote(25000, "PE").iv
     enrich_chain(ch, 0.065, now=datetime(2026, 10, 14, 10, tzinfo=timezone.utc))
     q = ch.quote(25000, "PE")
@@ -58,7 +58,7 @@ def test_enrich_recomputes_iv_and_keeps_source_iv():
 
 
 def test_enrich_note_not_duplicated():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     for _ in range(3):
         ch.quote(25000, "CE").iv = None
         enrich_chain(ch, 0.065, now=datetime(2026, 10, 14, 10, tzinfo=timezone.utc))

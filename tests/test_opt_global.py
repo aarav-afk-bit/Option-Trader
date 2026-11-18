@@ -5,7 +5,7 @@ from option_trader.optimizer.objective import Preferences
 from option_trader.optimizer.search import run_global, template_seeds
 from option_trader.strategy.templates import BUILTIN_TEMPLATES
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 from .test_opt_search import make_opt, smile_chain
 
 
@@ -55,8 +55,8 @@ def test_robust_score_blends_in_shifted_scenarios():
 
 
 def test_endpoint_global_with_empty_legs():
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    r = client.post("/api/strategy/optimize", json={"symbol": "NIFTY", "legs": [],
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    r = client.post("/api/strategy/optimize", json={"symbol": "NDX", "legs": [],
                                                      "prefs": {"allow_unlimited_loss": True}})
     assert r.status_code == 200, r.text
     d = r.json()

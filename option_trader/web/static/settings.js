@@ -1,11 +1,11 @@
-/* Settings page: sources, Angel One credentials, charges, and the connection doctor. */
+/* Settings page: sources, Tradier token, charges, and the connection doctor. */
 "use strict";
 
 (function () {
   const { api } = window.App;
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const NAMES = { nse: "NSE (nseindia.com)", angelone: "Angel One SmartAPI", yahoo: "Yahoo Finance" };
+  const NAMES = { tradier: "Tradier (real-time, needs a token)", cboe: "Cboe delayed quotes (free)", yahoo: "Yahoo Finance (delayed)" };
   let order = [], enabled = new Set();
 
   function renderSources() {
@@ -16,7 +16,7 @@
   }
 
   function fill(v) {
-    order = [...v.providers, ...["nse", "angelone", "yahoo"].filter((p) => !v.providers.includes(p))];
+    order = [...v.providers, ...["tradier", "cboe", "yahoo"].filter((p) => !v.providers.includes(p))];
     enabled = new Set(v.providers);
     renderSources();
     $("#st-live").checked = v.live_ticks;
@@ -24,12 +24,13 @@
     $("#st-stale").value = v.stale_seconds;
     $("#st-rate").value = (v.risk_free_rate * 100).toFixed(2);
     for (const [k, val] of Object.entries(v.charges)) { const el = document.getElementById("st-" + k); if (el) el.value = val; }
-    const a = v.angel;
-    $("#st-angel-status").innerHTML = a.configured
-      ? `<span class="pos">Saved:</span> API key ${esc(a.api_key)}, client ${esc(a.client_code)}, PIN ${esc(a.pin)}, TOTP ${esc(a.totp_secret)}`
-      : '<span class="warn">Not set up</span> — the app works without it, using NSE snapshots.';
+    const tr = v.tradier;
+    $("#st-tradier-status").innerHTML = tr.configured
+      ? `<span class="pos">Saved:</span> token ${esc(tr.token)} (${tr.sandbox ? "sandbox, delayed" : "real-time"})`
+      : '<span class="warn">Not set up</span> — the app works without it, using Cboe delayed quotes.';
+    $("#st-sandbox").checked = !!tr.sandbox;
     $("#st-dir").textContent = `Saved in ${v.data_dir}`;
-    ["#st-api-key", "#st-client", "#st-pin", "#st-totp"].forEach((s) => { $(s).value = ""; });
+    $("#st-token").value = "";
   }
 
   async function load() {
@@ -67,11 +68,10 @@
       stale_seconds: Number($("#st-stale").value), risk_free_rate: Number($("#st-rate").value) / 100, charges,
     }, "Settings saved and applied.");
   });
-  $("#st-angel-save").addEventListener("click", () => save({ angel: {
-    api_key: $("#st-api-key").value, client_code: $("#st-client").value, pin: $("#st-pin").value, totp_secret: $("#st-totp").value,
-  } }, "Angel One details saved. Press “Test connections” to check them."));
-  $("#st-angel-clear").addEventListener("click", () => {
-    if (confirm("Remove the saved Angel One details from this computer?")) save({ angel: { clear: true } }, "Angel One details removed.");
+  $("#st-tradier-save").addEventListener("click", () => save({ tradier: { token: $("#st-token").value, sandbox: $("#st-sandbox").checked } },
+    "Tradier settings saved. Press “Test connections” to check them."));
+  $("#st-tradier-clear").addEventListener("click", () => {
+    if (confirm("Remove the saved Tradier token from this computer?")) save({ tradier: { clear: true } }, "Tradier token removed.");
   });
 
   $("#st-test").addEventListener("click", async () => {

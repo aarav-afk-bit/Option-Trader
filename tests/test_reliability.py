@@ -3,10 +3,10 @@ import time
 
 from option_trader.providers.base import DataProvider
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 
-class SlowNSE(RecordedNSEProvider):
+class SlowNSE(RecordedProvider):
     def get_option_chain(self, symbol, expiry=None):
         time.sleep(0.2)
         return super().get_option_chain(symbol, expiry)
@@ -16,7 +16,7 @@ def test_concurrent_requests_share_one_fetch():
     p = SlowNSE()
     m = manager_with(p)
     results = []
-    threads = [threading.Thread(target=lambda: results.append(m.get_chain("NIFTY", use_cache=False)))
+    threads = [threading.Thread(target=lambda: results.append(m.get_chain("NDX", use_cache=False)))
                for _ in range(5)]
     for t in threads:
         t.start()
@@ -36,12 +36,12 @@ def test_single_flight_propagates_errors():
 
 
 def test_throttle_spaces_requests():
-    class Throttled(RecordedNSEProvider):
+    class Throttled(RecordedProvider):
         min_interval = 0.15
 
     m = manager_with(Throttled())
     t0 = time.monotonic()
-    m.get_chain("NIFTY", use_cache=False)
-    m.get_chain("NIFTY", use_cache=False)
+    m.get_chain("NDX", use_cache=False)
+    m.get_chain("NDX", use_cache=False)
     assert time.monotonic() - t0 >= 0.15
     assert DataProvider.min_interval == 0
