@@ -177,6 +177,14 @@
       <div class="card"><h3>Change in open interest</h3><div id="ch-oichg" class="chart"></div></div>
       <div class="card"><h3>IV smile</h3><div id="ch-smile" class="chart"></div></div>
       <div class="card"><h3>IV term structure <button id="load-term" class="small-btn">Load</button></h3><div id="ch-term" class="chart"><p class="muted">Fetches the next expiries' live chains. Press Load.</p></div></div>
+      <div class="card wide"><h3>Dealer gamma exposure <button id="load-gex" class="small-btn">Load</button>
+          <select id="gex-exp" class="small-sel" title="How many expiries to include"><option value="1">This expiry</option><option value="4" selected>Next 4 expiries</option><option value="8">Next 8</option></select></h3>
+        <div id="gex-summary" class="kv-strip"></div>
+        <div id="ch-gex" class="chart tall"><p class="muted">Estimates how market makers' hedging pushes the price, from live open interest. Press Load.</p></div>
+        <p class="muted">Assumes customers sell calls and buy puts (the usual convention), so dealers are long calls and short puts. Positive gamma damps moves; negative gamma amplifies them.</p></div>
+      <div class="card wide"><h3>Unusual options activity <button id="load-flow" class="small-btn">Scan</button></h3>
+        <div id="flow-summary" class="muted">Contracts trading far more than their open interest, ranked by dollars traded, across the next 4 expiries.</div>
+        <div class="table-wrap"><table class="simple" id="flow-table"><thead><tr><th>Expiry</th><th>Strike</th><th>Type</th><th>Volume</th><th>OI</th><th>Vol/OI</th><th>Price</th><th>Premium</th><th>Traded at</th><th>Read</th></tr></thead><tbody></tbody></table></div></div>
       <div class="card wide"><h3>Intraday: spot, PCR and ATM IV</h3><div id="ch-intraday" class="chart tall"></div>
         <p class="muted">Recorded from each live fetch while the app is running (resets daily and on restart).</p></div>
     </div>
@@ -493,5 +501,6 @@
 <script src="/static/quicktrade.js"></script>
 <script src="/static/valuation.js"></script>
 <script src="/static/events.js"></script>
+<script src="/static/positioning.js"></script>
 </body>
 </html>

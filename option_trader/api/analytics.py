@@ -209,3 +209,42 @@ def events(symbol: str, expiry: Optional[str] = None, source: Optional[str] = No
         except DataUnavailableError as exc:
             out["history_error"] = str(exc)
     return out
+
+
+def _near_chains(manager: ProviderManager, symbol: str, expiry: Optional[str], source: Optional[str], count: int):
+    """The chosen (or nearest) expiry plus the following ones, up to ``count`` chains."""
+    try:
+        first = manager.get_chain(symbol, parse_expiry(expiry), source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    chains = [first]
+    for e in [e for e in sorted(first.expiries) if e > first.expiry][: max(count, 1) - 1]:
+        try:
+            chains.append(manager.get_chain(symbol, e, first.source))
+        except DataUnavailableError:
+            break
+    return chains
+
+
+@router.get("/gamma")
+def gamma(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None, expiries: int = 4,
+          manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Dealer gamma exposure by strike, total, and the zero-gamma level."""
+    from ..analytics.gamma import gamma_exposure
+
+    chains = _near_chains(manager, symbol, expiry, source, min(max(expiries, 1), 8))
+    try:
+        return gamma_exposure(chains, chains[0].rate or manager.risk_free_rate)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/flow")
+def flow(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None, expiries: int = 4,
+         min_volume: int = 100, min_vol_oi: float = 1.0, min_premium: float = 25_000,
+         manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Unusual options activity: big, new-position volume, ranked by premium traded."""
+    from ..analytics.flow import unusual_activity
+
+    chains = _near_chains(manager, symbol, expiry, source, min(max(expiries, 1), 8))
+    return unusual_activity(chains, max(min_volume, 1), max(min_vol_oi, 0.0), max(min_premium, 0.0))

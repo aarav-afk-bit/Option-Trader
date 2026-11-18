@@ -558,6 +558,18 @@ App.plotLayout = function (extra = {}) {
   }
   return layout;
 };
+/** Draw a Plotly chart into an element that may hold a placeholder/error message. */
+App.plot = (el, traces, layout) => {
+  el = typeof el === "string" ? document.getElementById(el) : el;
+  if (!el.classList.contains("js-plotly-plot")) el.innerHTML = "";
+  return Plotly.react(el, traces, layout, { displayModeBar: false, responsive: true });
+};
+/** Replace a chart with a message (and free Plotly's state so it can be redrawn later). */
+App.chartMessage = (el, html) => {
+  el = typeof el === "string" ? document.getElementById(el) : el;
+  if (el.classList.contains("js-plotly-plot")) Plotly.purge(el);
+  el.innerHTML = html;
+};
 $$(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
 $("#controls").addEventListener("submit", async (ev) => {
