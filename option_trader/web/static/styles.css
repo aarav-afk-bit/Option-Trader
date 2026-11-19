@@ -15,19 +15,20 @@
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --bg: #000000; --panel: #0c0c0c; --panel2: #141414; --panel3: #1b1b1b;
-  --text: #ededed; --muted: #8c8c8c; --border: #232323; --border-hi: #3a3a3a;
-  /* Minimal monochrome: white is the only accent; colour is kept for meaning (profit/loss). */
-  --accent: #f2f2f2; --accent2: #a6a6a6; --violet: #a6a6a6;
-  --green: #22c55e; --red: #ef4444; --amber: #d6a537;
-  --on-accent: #000000;
+  /* OLED night: true black, deep-navy panels, a soft horizon blue as the accent and a warm
+     cloud-orange used sparingly. Green/red stay for profit and loss. */
+  --bg: #000000; --panel: #04070c; --panel2: #070c14; --panel3: #0b121d;
+  --text: #dbe3ec; --muted: #6f7e90; --border: #111a27; --border-hi: #1e2b3e;
+  --accent: #7fa9d8; --accent2: #c98a5e; --violet: #8f9fb8;
+  --green: #3dbb7d; --red: #e05d5d; --amber: #c98a5e;
+  --on-accent: #02060c;
   --grid: transparent;
   --glow: none; --glow-strong: none;
-  --itm: rgba(255, 255, 255, 0.025); --atm: rgba(255, 255, 255, 0.07);
-  /* Data series: light grey, soft blue, muted amber (distinct in lightness and hue). */
-  --series-1: #d9d9d9; --series-2: #5f9fe0; --series-3: #c9973f;
-  --profit: #22c55e; --loss: #ef4444;
-  --chart-grid: rgba(255, 255, 255, .06);
+  --itm: rgba(127, 169, 216, 0.035); --atm: rgba(127, 169, 216, 0.10);
+  /* Data series: horizon blue, warm cloud orange, steel grey. */
+  --series-1: #8fb8e4; --series-2: #c98a5e; --series-3: #8e9aab;
+  --profit: #3dbb7d; --loss: #e05d5d;
+  --chart-grid: rgba(127, 169, 216, .07);
   --shadow: none;
   --radius: 3px;
   font-family: var(--font-ui);
@@ -602,3 +603,37 @@ button.primary:hover:not(:disabled) { color: var(--on-accent); filter: brightnes
 button.primary { background: var(--accent); }
 #chain-table.iv-heat td.iv-cell { background: rgba(255, 255, 255, calc(var(--heat, 0) * .14)); }
 .oi-bar.call, .oi-bar.put { background: linear-gradient(270deg, var(--muted), transparent); }
+
+
+/* ==========================================================================
+   OLED night: a faint blue horizon glow on true black, glassy navy panels.
+   ========================================================================== */
+:root:not([data-theme="light"]) body {
+  background:
+    radial-gradient(120% 38% at 50% 108%, rgba(70, 120, 185, .16), transparent 70%),
+    radial-gradient(60% 30% at 18% -6%, rgba(201, 138, 94, .05), transparent 70%),
+    #000;
+  background-attachment: fixed;
+}
+:root:not([data-theme="light"]) .card,
+:root:not([data-theme="light"]) .neon-panel {
+  background: linear-gradient(180deg, rgba(127, 169, 216, .045), rgba(127, 169, 216, 0) 140px), var(--panel) !important;
+  border-color: var(--border) !important;
+}
+:root:not([data-theme="light"]) .topbar,
+:root:not([data-theme="light"]) .ticker { background: rgba(0, 0, 0, .85); }
+.brand { color: var(--text); }
+.brand .slash { color: var(--accent2); }
+.card h3 { color: var(--text); }
+.sidebar .tab.active { color: var(--accent); border-left-color: var(--accent); background: rgba(127, 169, 216, .07) !important; }
+.tab.active::after { background: var(--accent); }
+button.primary { background: var(--accent); color: var(--on-accent); }
+button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+button.primary:hover:not(:disabled) { color: var(--on-accent); }
+button.optimise-btn:hover:not(:disabled) { border-color: var(--accent) !important; }
+input:focus, select:focus { border-color: var(--accent); }
+tr.atm td.strike { color: var(--accent); box-shadow: inset 0 1px 0 var(--border-hi), inset 0 -1px 0 var(--border-hi); }
+#chain-table.iv-heat td.iv-cell { background: rgba(127, 169, 216, calc(var(--heat, 0) * .22)); }
+.oi-bar.call, .oi-bar.put { background: linear-gradient(270deg, var(--accent), transparent); opacity: .2; }
+.hud-clock { color: var(--text); }
+::selection { background: #1e2b3e; color: #fff; }
