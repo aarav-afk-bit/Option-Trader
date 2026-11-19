@@ -10,7 +10,7 @@
     try {
       const fx = localStorage.getItem("ot-fx");
       const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (fx === "0" || (fx === null && reduced)) document.documentElement.classList.add("fx-off");
+      if (fx !== "1" || reduced) document.documentElement.classList.add("fx-off");
     } catch (_) {}
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -68,7 +68,7 @@
 
 <div class="shell" id="shell">
 <nav class="tabs sidebar neon-panel" aria-label="Sections">
-  <div class="side-title"><span class="glyph">NAV</span><span class="slash">//</span><span class="glyph">SYS</span></div>
+  <div class="side-title">Menu</div>
   <button class="tab active" data-tab="chain" title="Option Chain (key 1)">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M3 12h18M3 19h18M9 3v18M15 3v18"/></svg><span class="lbl">Option Chain</span><kbd>1</kbd>
   </button>
@@ -443,7 +443,7 @@
 </main>
 
 <aside class="hud-panel neon-panel" id="hud-panel" aria-label="Live status">
-  <div class="side-title"><span class="glyph">HUD</span><span class="slash">//</span><span class="glyph">LIVE</span>
+  <div class="side-title">Live status
     <button type="button" id="hud-collapse" class="icon-btn" title="Hide this panel (])">×</button></div>
   <div class="hud-clock"><span id="hud-time">--:--:--</span><small>ET</small></div>
   <div class="hud-grid">
@@ -471,7 +471,7 @@
     <div><kbd>Ctrl K</kbd> commands · <kbd>?</kbd> help</div>
   </div>
 </aside>
-<button type="button" id="hud-reopen" class="hud-reopen hidden" title="Show live status panel (])">HUD</button>
+<button type="button" id="hud-reopen" class="hud-reopen hidden" title="Show live status panel (])">Status</button>
 </div>
 
 <div id="qt" class="cmd hidden" role="dialog" aria-modal="true" aria-label="Quick trade">
