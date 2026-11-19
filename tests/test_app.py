@@ -57,7 +57,24 @@ def test_neon_side_panels_present():
 def test_series_palette_tokens_and_no_dual_axes():
     client = TestClient(create_app(manager_with()))
     css = client.get("/static/styles.css").text
-    assert "--series-1: #00a6ba" in css and "--series-1: #0581a3" in css  # dark and light, validated
+    import re
+
+    def lum(hexc):
+        r, g, b = (int(hexc[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        f = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+
+    def contrast(a, b):
+        hi, lo = sorted((lum(a), lum(b)), reverse=True)
+        return (hi + 0.05) / (lo + 0.05)
+
+    # dark block first, light theme second: every chart series must stand out from the background
+    blocks = re.findall(r"--bg: (#[0-9a-f]{6});.*?--series-1: (#[0-9a-f]{6}); --series-2: (#[0-9a-f]{6}); "
+                        r"--series-3: (#[0-9a-f]{6});", css, re.S)
+    assert len(blocks) == 2
+    for bg, *series in blocks:
+        assert len(set(series)) == 3
+        assert all(contrast(c, bg) >= 3.0 for c in series), (bg, series)
     for js in ("charts.js", "builder.js"):
         assert "overlaying" not in client.get(f"/static/{js}").text  # stacked panels, never two y-scales
 
