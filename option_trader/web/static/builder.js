@@ -290,7 +290,7 @@
         <div>Gamma</div><div>${fmt(g.gamma, 4)}</div>
         <div>Theta / day</div><div>${fmt(g.theta, 2)}</div>
         <div>Vega / vol pt</div><div>${fmt(g.vega, 2)}</div>
-      </div><p class="muted">Lot size ${r.strategy.lot_size}. Prices from ${esc(r.source.toUpperCase())} at ${esc(new Date(r.chain_fetched_at).toLocaleTimeString())}.</p></div>
+      </div><p class="muted">${r.strategy.lot_size} shares per contract. Prices from ${esc(r.source.toUpperCase())} at ${esc(new Date(r.chain_fetched_at).toLocaleTimeString())}.</p></div>
       ${r.costs ? `<div class="card"><h3>Costs &amp; net</h3><div class="kv">
         <div>Charges to enter</div><div>${fmt(r.costs.entry.total)}</div>
         <div>Round trip (in + out)</div><div>${fmt(r.costs.round_trip)}</div>
