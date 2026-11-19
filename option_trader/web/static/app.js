@@ -5,8 +5,8 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
-const fmtInt = (v) => (v === null || v === undefined ? "–" : Math.round(v).toLocaleString("en-IN"));
+const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) ? "–" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
+const fmtInt = (v) => (v === null || v === undefined ? "–" : Math.round(v).toLocaleString("en-US"));
 const pct = (v, d = 1) => (v === null || v === undefined ? "–" : (v * 100).toFixed(d) + "%");
 const signCls = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
 
@@ -172,7 +172,7 @@ function startStream() {
       return;
     }
     const fresh = st.last_tick_at && Date.now() - new Date(st.last_tick_at).getTime() < 60000;
-    if (st.connected && fresh) setLiveBadge("live", `Angel One feed · ${st.subscribed_tokens} contracts · last tick ${new Date(st.last_tick_at).toLocaleTimeString()}`);
+    if (st.connected && fresh) setLiveBadge("live", `${(st.feed || "live").replace(/^./, (c) => c.toUpperCase())} feed · ${st.subscribed_tokens} symbols · last tick ${new Date(st.last_tick_at).toLocaleTimeString()}`);
     else if (st.connected) setLiveBadge("connecting", "Connected; waiting for ticks (none arrive while the market is closed)");
     else setLiveBadge("off", st.error ? `Feed error: ${st.error}` : "Live feed disconnected; retrying");
   });
@@ -195,6 +195,45 @@ function dayMove(ch) {
   return ` <span class="${signCls(chg)}" title="Change from previous close ${fmt(idx.prev_close)}">${chg >= 0 ? "+" : ""}${fmt(chg)} (${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%)</span>`;
 }
 
+function verifyBadge(v) {
+  if (!v) return "";
+  const cls = v.confidence === "high" ? "bullish" : v.confidence === "medium" ? "neutral" : "bearish";
+  return `<span class="pill ${cls}" title="${v.matched} prices compared with ${esc(String(v.secondary).toUpperCase())}">Cross-checked ${esc(String(v.secondary).toUpperCase())} · ${v.agree_pct}% agree</span>`;
+}
+
+async function crossCheck(silent = false) {
+  if (!App.chain) return;
+  const btn = $("#verify-btn");
+  btn.disabled = true;
+  try {
+    const d = await api("/api/verify?" + qs({ symbol: App.chain.symbol, expiry: App.chain.expiry, source: $("#source").value }));
+    if (!d.available) { if (!silent) showBanner(d.reason, "info"); return; }
+    App.chain.verification = { secondary: d.secondary, agree_pct: d.agree_pct, confidence: d.confidence, matched: d.matched };
+    renderChain(App.chain);
+    const worst = d.disagreements.slice(0, 5).map((x) => `${x.strike} ${x.type}: ${x.primary} vs ${x.secondary}`).join(" · ");
+    if (!silent || d.confidence !== "high") {
+      showBanner(`Cross-check vs ${d.secondary.toUpperCase()}: ${d.agree}/${d.matched} prices agree (${d.agree_pct}%), spot differs by ${d.spot_diff}. ` +
+        (worst ? `Largest differences: ${worst}` : "All prices agree within spread and timing tolerance."), d.confidence === "low" ? "error" : "info");
+    }
+  } catch (e) {
+    if (!silent) showBanner(`Cross-check failed: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+App.crossCheck = crossCheck;
+$("#verify-btn").addEventListener("click", () => crossCheck(false));
+setInterval(() => { if ($("#verify-auto").checked && App.market && App.market.open && !document.hidden) crossCheck(true); }, 120000);
+
+function qualityBadge(ch) {
+  const q = ch.quality;
+  if (!q) return "";
+  const cls = q.score >= 95 ? "bullish" : q.score >= 80 ? "neutral" : "bearish";
+  const lines = q.issues.slice(0, 12).map((i) => `${i.strike} ${i.type}: ${i.issues.join("; ")}`).join("\n");
+  const title = `${q.priced} priced quotes · ${q.suspect} suspect · ${q.stale_last_trade} last trades outside the live bid/ask · ${q.no_bid_ask} without a bid/ask${lines ? "\n\n" + lines : ""}\n\nSuspect quotes are shown but not used for the forward, IV analytics or the optimiser.`;
+  return `<span class="pill ${cls}" title="${esc(title)}">Data quality ${q.score}/100${q.suspect ? ` · ${q.suspect} ⚠` : ""}</span>`;
+}
+
 function ageBadge(ch) {
   const age = ch.data_age_seconds;
   if (age == null) return "";
@@ -209,12 +248,16 @@ function renderChain(ch) {
   $("#chain-meta").innerHTML = `
     <span>Spot <b>${fmt(ch.spot)}</b>${dayMove(ch)}</span>
     <span>ATM <b>${fmt(ch.atm_strike, 0)}</b></span>
+    ${ch.rate != null ? `<span title="Risk-free rate used for this expiry: ${esc(ch.rate_source || "")}">Rate <b>${(ch.rate * 100).toFixed(2)}%</b></span>` : ""}
+    ${ch.futures_ltp ? `<span title="Exchange-traded futures price for this expiry">Futures <b>${fmt(ch.futures_ltp)}</b></span>` : ""}
     ${ch.forward ? `<span title="Futures-equivalent price implied by put-call parity; options are priced off this">Forward <b>${fmt(ch.forward)}</b> <span class="${signCls(ch.forward - ch.spot)}">(${ch.forward >= ch.spot ? "+" : ""}${fmt(ch.forward - ch.spot)})</span></span>` : ""}
     <span>Expiry <b>${esc(ch.expiry)}</b></span>
-    <span>Lot size <b>${ch.lot_size ?? "–"}</b></span>
+    <span title="Shares per contract">Multiplier <b>${ch.lot_size ?? "–"}</b></span>
     <span>Source <b>${esc(ch.source.toUpperCase())}</b></span>
     ${ch.live_at ? `<span class="pill bullish">Live tick ${esc(new Date(ch.live_at).toLocaleTimeString())}</span>` : ""}
     ${ageBadge(ch)}
+    ${qualityBadge(ch)}
+    ${verifyBadge(ch.verification)}
     <span>Snapshot <b>${esc(ts)}</b>${ch.exchange_timestamp ? ` · exchange time <b>${esc(ch.exchange_timestamp)}</b>` : ""}</span>
     ${App.market && !App.market.open && !(ch.live_at && Date.now() - new Date(ch.live_at).getTime() < 120000) ? `<span class="pill bearish">Market closed: last traded prices${ch.exchange_timestamp ? " as of " + esc(ch.exchange_timestamp) : ""}</span>` : ""}
     ${ch.notes.map((n) => `<span class="muted">${esc(n)}</span>`).join("")}`;
@@ -243,8 +286,15 @@ function renderChain(ch) {
     return old === undefined || old === q.ltp ? "" : q.ltp > old ? "flash-up" : "flash-down";
   };
   const ltpCell = (q, type, strike, itm) =>
-    q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)} ${q.ltp_stale ? "stale-ltp" : ""}" data-type="${type}" data-strike="${strike}" title="${q.ltp_stale ? `Last trade ${fmt(q.ltp)} is outside the current bid/ask; the app prices this contract at the mid ${fmt(q.mid)}. ` : ""}Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
+    q && q.ltp ? `<td class="ltp ${itm} ${flash(q, type, strike)} ${q.ltp_stale ? "stale-ltp" : ""} ${q.suspect ? "suspect" : ""}" data-type="${type}" data-strike="${strike}" title="${q.suspect ? `⚠ Data check: ${esc(q.issues.join("; "))}. Not used for analysis. ` : ""}${q.ltp_stale ? `Last trade ${fmt(q.ltp)} is outside the current bid/ask; the app prices this contract at the mid ${fmt(q.mid)}. ` : ""}Add to Strategy Builder (Shift+click to sell)${q.tick_ts ? " · tick " + new Date(q.tick_ts).toLocaleTimeString() : ""}">${fmt(q.ltp)}</td>` : `<td class="${itm}">${fmt(q?.ltp)}</td>`;
 
+  // IV heat: one hue, intensity by IV rank within the visible strikes (sequential encoding).
+  const ivs = visible.flatMap((r) => [r.call?.iv, r.put?.iv]).filter((v) => v);
+  const ivLo = Math.min(...ivs), ivHi = Math.max(...ivs);
+  const ivTd = (q, itm) => {
+    const heat = q && q.iv && ivHi > ivLo ? ((q.iv - ivLo) / (ivHi - ivLo)).toFixed(2) : 0;
+    return `<td class="${itm} c-iv iv-cell" style="--heat:${heat}">${pct(q?.iv)}</td>`;
+  };
   const rows = visible.map((r) => {
     const c = r.call, p = r.put;
     const atm = r.strike === ch.atm_strike ? "atm" : "";
@@ -256,7 +306,7 @@ function renderChain(ch) {
       ${oiCell(c, "call", topCall.has(r.strike))}
       ${tdC(fmtInt(c?.oi_change), "c-oi " + signCls(c?.oi_change))}
       ${tdC(fmtInt(c?.volume), "c-vol")}
-      ${tdC(pct(c?.iv), "c-iv")}
+      ${ivTd(c, citm)}
       ${tdC(fmt(c?.vega, 2), "c-greeks2")}
       ${tdC(fmt(c?.theta, 2), "c-greeks2")}
       ${tdC(fmt(c?.gamma, 5), "c-greeks2")}
@@ -274,7 +324,7 @@ function renderChain(ch) {
       ${tdP(fmt(p?.gamma, 5), "c-greeks2")}
       ${tdP(fmt(p?.theta, 2), "c-greeks2")}
       ${tdP(fmt(p?.vega, 2), "c-greeks2")}
-      ${tdP(pct(p?.iv), "c-iv")}
+      ${ivTd(p, pitm)}
       ${tdP(fmtInt(p?.volume), "c-vol")}
       ${tdP(fmtInt(p?.oi_change), "c-oi " + signCls(p?.oi_change))}
       ${oiCell(p, "put", topPut.has(r.strike))}
@@ -346,6 +396,11 @@ $("#export-csv").addEventListener("click", () => {
 $("#jump-atm").addEventListener("click", jumpToATM);
 $("#strike-window").addEventListener("change", () => { savePrefs(); if (App.chain) { App._scrolled = false; renderChain(App.chain); } });
 $$(".chain-tools input[data-col]").forEach((cb) => cb.addEventListener("change", () => { savePrefs(); applyColumns(); }));
+$("#iv-heat").addEventListener("change", () => {
+  $("#chain-table").classList.toggle("iv-heat", $("#iv-heat").checked);
+  try { localStorage.setItem("ot-ivheat", $("#iv-heat").checked ? "1" : "0"); } catch (_) { /* ignore */ }
+});
+try { if (localStorage.getItem("ot-ivheat") !== "0") { $("#iv-heat").checked = true; $("#chain-table").classList.add("iv-heat"); } } catch (_) { /* ignore */ }
 (function restorePrefs() {
   const prefs = loadPrefs();
   if (prefs.window) $("#strike-window").value = prefs.window;
@@ -403,6 +458,7 @@ function renderSignals(d) {
     </div><p class="muted">${esc(t.volatility.detail || "")}</p></div>` : "";
 
   $("#signals-out").innerHTML = `
+    ${(d.warnings || []).map((w) => `<div class="banner warn-banner">${esc(w)}</div>`).join("")}
     <div class="cards">
       <div class="card">
         <h3>Market view: <span class="pill ${v.direction}">${v.direction.toUpperCase()}</span></h3>
@@ -466,23 +522,53 @@ App.switchTab = switchTab;
 App.activeTab = () => ($(".tab.active") || {}).dataset?.tab;
 
 /** Plotly layout themed from the current CSS variables. */
+App.css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/** Series colours by role (validated palette in styles.css). */
+App.colors = () => ({
+  s1: App.css("--series-1"), s2: App.css("--series-2"), s3: App.css("--series-3"),
+  profit: App.css("--profit"), loss: App.css("--loss"), accent: App.css("--accent2"),
+  text: App.css("--text"), muted: App.css("--muted"), grid: App.css("--chart-grid"), border: App.css("--border"),
+});
+/** Hex colour with alpha, for fills and glows. */
+App.alpha = (hex, a) => {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+/** Plotly layout themed from the current CSS variables: recessive grid, mono tick labels. */
 App.plotLayout = function (extra = {}) {
-  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const text = css("--text"), grid = css("--border");
+  const c = App.colors();
+  const mono = App.css("--font-mono"), ui = App.css("--font-ui");
   const layout = {
     margin: { l: 60, r: 20, t: 10, b: 45 },
     paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-    font: { color: text, size: 12 },
-    legend: { orientation: "h", y: -0.2 },
+    font: { color: c.muted, size: 12, family: ui },
+    legend: { orientation: "h", y: -0.2, font: { color: c.text } },
     hovermode: "x unified",
-    hoverlabel: { bgcolor: css("--panel2"), bordercolor: grid, font: { color: text } },
+    hoverlabel: { bgcolor: App.css("--panel2"), bordercolor: c.border, font: { color: c.text, family: mono } },
+    bargap: 0.25, bargroupgap: 0.08, barcornerradius: 3,
     ...extra,
   };
-  // Every axis (xaxis, yaxis, yaxis2, ...) gets the themed grid colours unless it sets its own.
+  // Every axis (xaxis, yaxis, yaxis2, ...) gets the recessive grid and mono ticks unless it sets its own.
   for (const key of new Set(["xaxis", "yaxis", ...Object.keys(extra).filter((k) => /^[xy]axis\d*$/.test(k))])) {
-    layout[key] = { gridcolor: grid, zerolinecolor: grid, linecolor: grid, ...(extra[key] || {}) };
+    layout[key] = { gridcolor: c.grid, zerolinecolor: c.border, linecolor: c.border,
+      tickfont: { family: mono, size: 11, color: c.muted }, title: { font: { size: 12, color: c.muted } },
+      ...(extra[key] || {}) };
+    if (extra[key] && typeof extra[key].title === "string") layout[key].title = { text: extra[key].title, font: { size: 12, color: c.muted } };
   }
   return layout;
+};
+/** Draw a Plotly chart into an element that may hold a placeholder/error message. */
+App.plot = (el, traces, layout) => {
+  el = typeof el === "string" ? document.getElementById(el) : el;
+  if (!el.classList.contains("js-plotly-plot")) el.innerHTML = "";
+  return Plotly.react(el, traces, layout, { displayModeBar: false, responsive: true });
+};
+/** Replace a chart with a message (and free Plotly's state so it can be redrawn later). */
+App.chartMessage = (el, html) => {
+  el = typeof el === "string" ? document.getElementById(el) : el;
+  if (el.classList.contains("js-plotly-plot")) Plotly.purge(el);
+  el.innerHTML = html;
 };
 $$(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
@@ -546,7 +632,7 @@ async function refreshMarket() {
     badge.textContent = label + (m.estimate ? " (est.)" : "");
     badge.className = "pill " + (m.open ? "bullish" : "bearish");
     const next = m.next_open ? ` · opens ${new Date(m.next_open).toLocaleString()}` : "";
-    badge.title = `${m.message || m.state}${next}${m.estimate ? " · estimated from the clock" : " · from NSE"}`;
+    badge.title = `${m.message || m.state}${next}${m.estimate ? " · estimated from the clock" : " · NYSE calendar"}`;
   } catch (e) {
     badge.textContent = "Market ?";
     badge.className = "pill neutral";

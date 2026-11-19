@@ -36,6 +36,17 @@ def pcr(chain: OptionChain) -> dict:
     }
 
 
+# Typical open-interest put-call ratios: index products carry big hedging put books.
+INDEX_LIKE_ETFS = {"SPY", "QQQ", "IWM", "DIA", "XSP", "RSP", "MDY"}
+
+
+def pcr_baseline(symbol: str) -> float:
+    from ..providers.base import is_us_index, normalize_symbol
+
+    sym = normalize_symbol(symbol)
+    return 1.3 if is_us_index(sym) or sym in INDEX_LIKE_ETFS else 0.7
+
+
 def max_pain(chain: OptionChain) -> Optional[float]:
     best, best_cost = None, math.inf
     for settle in chain.strikes:
@@ -125,7 +136,7 @@ def iv_skew(chain: OptionChain, steps: int = 3) -> Optional[float]:
         return None
     put = chain.quote(ks[i - steps], "PE")
     call = chain.quote(ks[i + steps], "CE")
-    if not (put and put.iv and call and call.iv):
+    if not (put and put.iv and call and call.iv) or put.suspect or call.suspect:
         return None
     return put.iv - call.iv
 
@@ -175,17 +186,22 @@ def chain_signals(chain: OptionChain, p: dict, mp: Optional[float], levels: dict
     sig: list[Signal] = []
     ratio = p["pcr_oi"]
     if ratio is not None:
-        if ratio > 1.6:
-            sig.append(Signal("PCR (OI)", "neutral", 0.3, ratio,
-                              f"PCR {ratio:.2f} is extremely high: heavy put writing but the market may be overbought"))
-        elif ratio >= 1.0:
-            sig.append(Signal("PCR (OI)", "bullish", min((ratio - 1.0) / 0.5, 1.0) * 0.7 + 0.2, ratio,
-                              f"PCR {ratio:.2f} > 1: put writers outnumber call writers, support below"))
-        elif ratio <= 0.7:
-            sig.append(Signal("PCR (OI)", "bearish", min((0.7 - ratio) / 0.3, 1.0) * 0.6 + 0.3, ratio,
-                              f"PCR {ratio:.2f} is low: call writing dominates, resistance overhead"))
+        # US reading: customers mostly BUY puts as hedges, so put OI measures fear, not support.
+        # Compare with the product's normal level and read extremes as contrarian signals.
+        base = pcr_baseline(chain.symbol)
+        rel = ratio / base
+        kind = "index/ETF" if base > 1 else "single-stock"
+        if rel >= 1.5:
+            sig.append(Signal("PCR (OI)", "bullish", min((rel - 1.5) / 1.0, 1.0) * 0.4 + 0.2, ratio,
+                              f"PCR {ratio:.2f} is far above the usual {base:.1f} for {kind} options: heavy hedging/fear, "
+                              "a contrarian bullish sign"))
+        elif rel <= 0.6:
+            sig.append(Signal("PCR (OI)", "bearish", min((0.6 - rel) / 0.3, 1.0) * 0.4 + 0.2, ratio,
+                              f"PCR {ratio:.2f} is well below the usual {base:.1f} for {kind} options: call speculation and "
+                              "complacency, a contrarian bearish sign"))
         else:
-            sig.append(Signal("PCR (OI)", "neutral", 0.2, ratio, f"PCR {ratio:.2f} is in the neutral band"))
+            sig.append(Signal("PCR (OI)", "neutral", 0.2, ratio,
+                              f"PCR {ratio:.2f} is within the normal range for {kind} options (~{base:.1f})"))
 
     if mp is not None and chain.spot:
         gap = (chain.spot - mp) / chain.spot

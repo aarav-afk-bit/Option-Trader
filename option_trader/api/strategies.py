@@ -65,7 +65,7 @@ def build_strategy(body: AnalyzeIn, manager: ProviderManager):
         if raw.expiry and parse_expiry(raw.expiry) != chain.expiry:
             leg_chain = manager.get_chain(body.symbol, parse_expiry(raw.expiry), chain.source)
         if otype == "FUT":
-            leg = Leg("FUT", action, 0.0, raw.lots, raw.premium or chain.spot, leg_chain.expiry,
+            leg = Leg("FUT", action, 0.0, raw.lots, raw.premium or leg_chain.fut_price or leg_chain.spot, leg_chain.expiry,
                       None, leg_chain.expiry_at)  # type: ignore[arg-type]
         else:
             q = leg_chain.quote(raw.strike, otype)  # type: ignore[arg-type]
@@ -99,7 +99,7 @@ def analyze_endpoint(body: AnalyzeIn, manager: ProviderManager = Depends(get_man
         raise HTTPException(503, str(exc)) from exc
     now = datetime.now(timezone.utc)
     target = now + timedelta(days=body.target_days) if body.target_days is not None else None
-    result = analyze(strategy, chain.spot, manager.risk_free_rate, now=now, target=target,
+    result = analyze(strategy, chain.spot, (chain.rate or manager.risk_free_rate), now=now, target=target,
                      iv_shift=body.iv_shift, range_pct=body.range_pct, q=chain.carry)
     result["source"] = chain.source
     result["symbol"] = chain.symbol
@@ -156,7 +156,7 @@ def build_from_template(template: StrategyTemplate, body: BuildIn, manager: Prov
         raise HTTPException(422, str(exc)) from exc
     now = datetime.now(timezone.utc)
     target = now + timedelta(days=body.target_days) if body.target_days is not None else None
-    result = analyze(strategy, chain.spot, manager.risk_free_rate, now=now, target=target,
+    result = analyze(strategy, chain.spot, (chain.rate or manager.risk_free_rate), now=now, target=target,
                      iv_shift=body.iv_shift, range_pct=body.range_pct, q=chain.carry)
     result.update(source=chain.source, symbol=chain.symbol, template=template.to_dict(),
                   chain_fetched_at=chain.fetched_at.isoformat())
@@ -281,7 +281,7 @@ def screen_strategies(body: ScreenIn, request: Request,
         except DataUnavailableError as exc:
             raise ResolveError(str(exc)) from exc
 
-    out = screen(chain, all_templates(request.app), manager.risk_free_rate, body.view, max(body.lots, 1),
+    out = screen(chain, all_templates(request.app), (chain.rate or manager.risk_free_rate), body.view, max(body.lots, 1),
                  body.max_loss, body.min_pop, body.allow_unlimited_loss, body.sort,
                  chain_for_offset=later_chain, top=max(1, min(body.top, 100)))
     out.update(symbol=chain.symbol, expiry=chain.expiry.isoformat(), spot=chain.spot, source=chain.source,
@@ -293,6 +293,10 @@ class DistributionIn(BaseModel):
     mode: str = "atm"  # atm | realised | implied | auto
     drift: float = Field(0.0, description="Expected move by expiry, e.g. 0.01 = +1%")
     vol_mult: float = 1.0
+    # Plain-language view (Quick trade): up | down | range | breakout | auto, and its strength in
+    # standard deviations of the move options are pricing (0.5 = a little, 1 = a lot).
+    view: Optional[str] = None
+    strength: float = 0.5
 
 
 class ScoreIn(AnalyzeIn):
@@ -300,8 +304,48 @@ class ScoreIn(AnalyzeIn):
     distribution: DistributionIn = DistributionIn()
 
 
+def apply_view(chain, d: DistributionIn) -> DistributionIn:
+    """Translate a plain-language view into the price model's drift / width."""
+    import math
+
+    from ..analytics.chain import atm_iv
+
+    if not d.view:
+        return d
+    view = d.view.lower()
+    if view == "auto":
+        return DistributionIn(mode="auto")
+    iv = atm_iv(chain) or 0.15
+    sd = iv * math.sqrt(max(chain.years_to_expiry(), 1e-6))
+    k = min(max(d.strength, 0.0), 2.0)
+    if view == "up":
+        return DistributionIn(mode="implied", drift=round(k * sd, 5))
+    if view == "down":
+        return DistributionIn(mode="implied", drift=round(-k * sd, 5))
+    if view == "range":
+        return DistributionIn(mode="implied", vol_mult=round(max(0.5, 1 - 0.4 * k), 3))
+    if view == "breakout":
+        return DistributionIn(mode="implied", vol_mult=round(1 + 0.5 * k, 3))
+    raise HTTPException(422, "view must be up, down, range, breakout or auto")
+
+
 def make_distribution(chain, manager: ProviderManager, d: DistributionIn):
     from ..optimizer.context import build_distribution
+
+    d = apply_view(chain, d)
+    if d.vol_mult != 1.0 and d.mode == "implied":
+        # Width views reshape the market-implied distribution around its centre.
+        from ..optimizer.distribution import Distribution
+        from ..optimizer.implied import implied_distribution, shift
+
+        try:
+            base = implied_distribution(chain, (chain.rate or manager.risk_free_rate))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        f = base.mean()
+        wide = Distribution(f * (base.prices / f) ** d.vol_mult, base.probs, "implied",
+                            dict(base.params, vol_mult=d.vol_mult))
+        return shift(wide, d.drift)
 
     candles = None
     if d.mode == "auto":
@@ -315,7 +359,7 @@ def make_distribution(chain, manager: ProviderManager, d: DistributionIn):
         except DataUnavailableError as exc:
             raise HTTPException(503, f"Realised volatility needs price history: {exc}") from exc
     try:
-        return build_distribution(chain, manager.risk_free_rate, d.mode, d.drift, d.vol_mult, candles)
+        return build_distribution(chain, (chain.rate or manager.risk_free_rate), d.mode, d.drift, d.vol_mult, candles)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -333,7 +377,7 @@ def score_strategy(body: ScoreIn, manager: ProviderManager = Depends(get_manager
         raise HTTPException(503, str(exc)) from exc
     dist = make_distribution(chain, manager, body.distribution)
     prefs = prefs_from_dict(body.prefs)
-    m = evaluate(strategy, dist, chain.spot, manager.risk_free_rate, chain.carry)
+    m = evaluate(strategy, dist, chain.spot, (chain.rate or manager.risk_free_rate), chain.carry)
     return {"metrics": m, "score": score(m, prefs), "distribution": dist.describe(),
             "source": chain.source, "symbol": chain.symbol}
 
@@ -342,16 +386,18 @@ class OptimizeIn(ScoreIn):
     max_iters: int = 20
     beam: int = 6
     fill: str = "market"
+    search: str = "auto"  # local (nearby your legs) | global (also every strategy type) | auto
 
 
 @router.post("/optimize")
-def optimize_strategy(body: OptimizeIn, manager: ProviderManager = Depends(get_manager)) -> dict:
+def optimize_strategy(body: OptimizeIn, request: Request, manager: ProviderManager = Depends(get_manager)) -> dict:
     """Move the given legs step by step toward the best win-rate/return blend on live prices."""
     from ..optimizer.objective import prefs_from_dict, prefs_to_dict
-    from ..optimizer.search import Optimizer, spec_of
+    from ..optimizer.search import Optimizer, run_global, spec_of
 
-    if not body.legs:
-        raise HTTPException(400, "Add at least one leg to optimise")
+    search = body.search if body.search in ("local", "global") else ("global" if not body.legs else "local")
+    if not body.legs and search == "local":
+        raise HTTPException(400, "Add at least one leg to optimise, or search all strategy types")
     try:
         chain = manager.get_chain(body.symbol, parse_expiry(body.expiry), body.source)
     except DataUnavailableError as exc:
@@ -362,13 +408,18 @@ def optimize_strategy(body: OptimizeIn, manager: ProviderManager = Depends(get_m
     def chain_for(exp):
         return manager.get_chain(body.symbol, exp, chain.source)
 
-    opt = Optimizer(chain, chain_for, dist, prefs, manager.risk_free_rate,
+    opt = Optimizer(chain, chain_for, dist, prefs, (chain.rate or manager.risk_free_rate),
                     body.fill if body.fill in ("ltp", "mid", "market") else "market")
     start = [spec_of({**leg.model_dump(), "expiry": leg.expiry or chain.expiry.isoformat()}) for leg in body.legs]
+    iters, beam = max(1, min(body.max_iters, 30)), max(1, min(body.beam, 8))
     try:
-        out = opt.run(start, max(1, min(body.max_iters, 30)), max(1, min(body.beam, 8)))
+        if search == "global":
+            out = run_global(opt, start, all_templates(request.app), iters, beam)
+        else:
+            out = opt.run(start, iters, beam)
     except DataUnavailableError as exc:
         raise HTTPException(503, str(exc)) from exc
+    out.update(search=search, rejected_illiquid=opt.rejected_illiquid)
     out.update(distribution=dist.describe(), prefs=prefs_to_dict(prefs), symbol=chain.symbol,
                expiry=chain.expiry.isoformat(), spot=chain.spot, source=chain.source,
                fetched_at=chain.fetched_at.isoformat())

@@ -5,7 +5,11 @@
   const { api, qs } = window.App;
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
+
+  const feeTitle = (t) => `Commission $${t.commission_per_contract}/contract + $${t.commission_per_order}/order, ` +
+    `ORF $${t.orf_per_contract} and OCC $${t.occ_per_contract} per contract, FINRA TAF $${t.taf_per_contract}/contract sold, ` +
+    `SEC fee $${(t.sec_fee_rate * 1e6).toFixed(2)} per $1M sold`;
 
   const state = { templates: [], legs: [], name: "Custom", lastResult: null, analyzeTimer: null, seq: 0 };
 
@@ -31,7 +35,7 @@
   function describeTemplate() {
     const t = currentTemplate();
     if (!t) return;
-    const legs = t.legs.map((l) => `${l.action} ${l.lots > 1 ? l.lots + "× " : ""}${l.option_type === "FUT" ? "underlying" : `${l.option_type} ATM${l.offset ? (l.offset > 0 ? "+" : "") + l.offset : ""}`}${l.expiry_offset ? " (next expiry)" : ""}`);
+    const legs = t.legs.map((l) => `${l.action} ${l.lots > 1 ? l.lots + "× " : ""}${l.option_type === "FUT" ? "100 shares" : `${l.option_type === "CE" ? "call" : "put"} ATM${l.offset ? (l.offset > 0 ? "+" : "") + l.offset : ""}`}${l.expiry_offset ? " (next expiry)" : ""}`);
     $("#tpl-desc").textContent = `${t.description || ""} Legs: ${legs.join(", ")}.`;
     $("#tpl-delete").classList.toggle("hidden", t.builtin);
   }
@@ -111,7 +115,7 @@
       const live = liveQuote(l);
       return `<tr class="${l.action.toLowerCase()}" data-i="${i}">
         <td><select data-k="action">${opt(["BUY", "SELL"], l.action)}</select></td>
-        <td><select data-k="option_type">${opt(["CE", "PE", "FUT"], l.option_type)}</select></td>
+        <td><select data-k="option_type">${opt(["CE", "PE", "FUT"], l.option_type, (v) => ({ CE: "Call", PE: "Put", FUT: "Stock" })[v])}</select></td>
         <td><select data-k="expiry">${opt(exps, l.expiry, shortDate)}</select></td>
         <td>${l.option_type === "FUT" ? "–" : `<select data-k="strike">${opt(strikeList, l.strike, (v) => fmt(v, v % 1 ? 2 : 0))}</select>`}</td>
         <td class="num"><input data-k="lots" type="number" min="1" value="${l.lots}"></td>
@@ -204,30 +208,34 @@
 
   function drawChart(r) {
     const x = r.prices, y = r.pnl_expiry;
+    const c = App.colors();
     const pos = y.map((v) => (v >= 0 ? v : null)), neg = y.map((v) => (v < 0 ? v : null));
-    const text = cssVar("--text"), grid = cssVar("--border");
     const targetLabel = `On ${new Date(r.target).toLocaleDateString()}`;
     const traces = [
-      { x, y: pos, name: "Profit at expiry", mode: "lines", line: { color: "#22c55e", width: 0 }, fill: "tozeroy", fillcolor: "rgba(34,197,94,0.18)", hoverinfo: "skip", showlegend: false },
-      { x, y: neg, name: "Loss at expiry", mode: "lines", line: { color: "#ef4444", width: 0 }, fill: "tozeroy", fillcolor: "rgba(239,68,68,0.18)", hoverinfo: "skip", showlegend: false },
-      { x, y, name: "At expiry", mode: "lines", line: { color: "#3b82f6", width: 2.5 } },
-      { x, y: r.pnl_target, name: targetLabel, mode: "lines", line: { color: "#f59e0b", width: 2, dash: "dash" } },
-      { x, y: r.pnl_today, name: "Today", mode: "lines", line: { color: "#a855f7", width: 1.5, dash: "dot" } },
-      { x: r.breakevens, y: r.breakevens.map(() => 0), name: "Breakeven", mode: "markers", marker: { color: text, size: 8, symbol: "diamond" } },
+      { x, y: pos, name: "Profit zone", mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: App.alpha(c.profit, 0.12), hoverinfo: "skip", showlegend: false },
+      { x, y: neg, name: "Loss zone", mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: App.alpha(c.loss, 0.12), hoverinfo: "skip", showlegend: false },
+      // neon glow: a wide translucent copy under the expiry line (decorative, not a series)
+      { x, y, mode: "lines", line: { color: App.alpha(c.s1, 0.22), width: 9 }, hoverinfo: "skip", showlegend: false },
+      { x, y, name: "At expiry", mode: "lines", line: { color: c.s1, width: 2 } },
+      { x, y: r.pnl_target, name: targetLabel, mode: "lines", line: { color: c.s2, width: 2, dash: "dash" } },
+      { x, y: r.pnl_today, name: "Today", mode: "lines", line: { color: c.s3, width: 2, dash: "dot" } },
+      { x: r.breakevens, y: r.breakevens.map(() => 0), name: "Breakeven", mode: "markers+text", text: r.breakevens.map((b) => fmt(b, 0)),
+        textposition: "top center", textfont: { color: c.text, size: 11 }, marker: { color: c.text, size: 9, symbol: "diamond", line: { color: App.css("--panel"), width: 2 } } },
     ];
-    const layout = {
+    const ymax = Math.max(...y.filter((v) => v != null)), ymin = Math.min(...y.filter((v) => v != null));
+    const layout = App.plotLayout({
       margin: { l: 70, r: 20, t: 40, b: 50 },
-      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-      font: { color: text },
-      title: { text: `${esc(r.strategy.name)} · ${esc(r.symbol)} · spot ${fmt(r.spot)} · ${esc(r.source.toUpperCase())}`, font: { size: 14 } },
-      xaxis: { title: "Underlying price", gridcolor: grid, zerolinecolor: grid },
-      yaxis: { title: "Profit / loss", gridcolor: grid, zerolinecolor: text, zerolinewidth: 1 },
-      hovermode: "x unified",
-      hoverlabel: { bgcolor: cssVar("--panel2"), bordercolor: grid, font: { color: text } },
-      legend: { orientation: "h", y: -0.18 },
-      shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: "#94a3b8", dash: "dot", width: 1 } }],
-      annotations: [{ x: r.spot, yref: "paper", y: 1, text: "Spot", showarrow: false, font: { size: 11 }, yanchor: "bottom" }],
-    };
+      title: { text: `${esc(r.strategy.name)} · ${esc(r.symbol)} · spot ${fmt(r.spot)} · ${esc(r.source.toUpperCase())}`, font: { size: 14, color: c.text } },
+      xaxis: { title: "Underlying price" },
+      yaxis: { title: "Profit / loss ($)", zerolinecolor: c.muted, zerolinewidth: 1 },
+      legend: { orientation: "h", y: -0.18, font: { color: c.text } },
+      shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: c.accent, dash: "dot", width: 1 } }],
+      annotations: [
+        { x: r.spot, yref: "paper", y: 1, text: "SPOT", showarrow: false, font: { size: 10, color: c.accent, family: App.css("--font-display") }, yanchor: "bottom" },
+        ...(ymax > 0 ? [{ xref: "paper", x: 0.01, y: ymax, text: "Profit", showarrow: false, xanchor: "left", font: { size: 11, color: c.muted } }] : []),
+        ...(ymin < 0 ? [{ xref: "paper", x: 0.99, y: ymin, text: "Loss", showarrow: false, xanchor: "right", yanchor: "bottom", font: { size: 11, color: c.muted } }] : []),
+      ],
+    });
     const el = $("#payoff");
     if (!el._fullLayout) el.innerHTML = ""; // drop the "add legs" placeholder before the first plot
     Plotly.react(el, traces, layout, { responsive: true, displaylogo: false });
@@ -243,9 +251,12 @@
 
   function drawGreeks(r) {
     const k = $("#greek-pick").value, c = r.greeks_curve;
-    Plotly.react("greeks-chart", [{ x: c.prices, y: c[k], mode: "lines", line: { color: "#3b82f6", width: 2 }, name: k }],
-      App.plotLayout({ showlegend: false, xaxis: { title: "Underlying price" },
-        shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: "#94a3b8", dash: "dot", width: 1 } }] }),
+    const col = App.colors();
+    Plotly.react("greeks-chart", [
+      { x: c.prices, y: c[k], mode: "lines", line: { color: App.alpha(col.s1, 0.22), width: 9 }, hoverinfo: "skip", showlegend: false },
+      { x: c.prices, y: c[k], mode: "lines", line: { color: col.s1, width: 2 }, name: k }],
+      App.plotLayout({ showlegend: false, xaxis: { title: "Underlying price" }, yaxis: { title: $("#greek-pick").selectedOptions[0].text },
+        shapes: [{ type: "line", x0: r.spot, x1: r.spot, yref: "paper", y0: 0, y1: 1, line: { color: col.accent, dash: "dot", width: 1 } }] }),
       { responsive: true, displaylogo: false });
   }
 
@@ -263,7 +274,7 @@
   function drawStats(r) {
     const g = r.greeks;
     const money = (v, unl) => (unl ? "Unlimited" : fmt(v));
-    const legs = r.strategy.legs.map((l) => `<li>${l.action} ${l.lots} lot(s) ${l.option_type === "FUT" ? "underlying" : `${fmt(l.strike, l.strike % 1 ? 2 : 0)} ${l.option_type}`} ${esc(l.expiry || "")} @ ${fmt(l.premium)}${l.iv ? ` · IV ${(l.iv * 100).toFixed(1)}%` : ""}</li>`).join("");
+    const legs = r.strategy.legs.map((l) => `<li>${l.action} ${l.lots} contract(s) ${l.option_type === "FUT" ? "× 100 shares" : `${fmt(l.strike, l.strike % 1 ? 2 : 0)} ${l.option_type}`} ${esc(l.expiry || "")} @ ${fmt(l.premium)}${l.iv ? ` · IV ${(l.iv * 100).toFixed(1)}%` : ""}</li>`).join("");
     $("#builder-stats").innerHTML = `
       <div class="card"><h3>Payoff</h3><div class="kv">
         <div>Net premium</div><div class="${r.net_premium >= 0 ? "pos" : "neg"}">${fmt(r.net_premium)} (${r.premium_type})</div>
@@ -279,14 +290,14 @@
         <div>Gamma</div><div>${fmt(g.gamma, 4)}</div>
         <div>Theta / day</div><div>${fmt(g.theta, 2)}</div>
         <div>Vega / vol pt</div><div>${fmt(g.vega, 2)}</div>
-      </div><p class="muted">Lot size ${r.strategy.lot_size}. Prices from ${esc(r.source.toUpperCase())} at ${esc(new Date(r.chain_fetched_at).toLocaleTimeString())}.</p></div>
+      </div><p class="muted">${r.strategy.lot_size} shares per contract. Prices from ${esc(r.source.toUpperCase())} at ${esc(new Date(r.chain_fetched_at).toLocaleTimeString())}.</p></div>
       ${r.costs ? `<div class="card"><h3>Costs &amp; net</h3><div class="kv">
         <div>Charges to enter</div><div>${fmt(r.costs.entry.total)}</div>
         <div>Round trip (in + out)</div><div>${fmt(r.costs.round_trip)}</div>
         <div title="Cost of crossing the bid/ask spread on entry and exit versus the mid">Spread slippage</div><div>${r.costs.spread_slippage == null ? "–" : fmt(r.costs.spread_slippage)}</div>
         <div>Net max profit</div><div class="pos">${r.unlimited_profit ? "Unlimited" : fmt(r.costs.net_max_profit)}</div>
         <div>Net max loss</div><div class="neg">${r.unlimited_loss ? "Unlimited" : fmt(r.costs.net_max_loss)}</div>
-      </div><p class="muted" title="Brokerage ₹${r.costs.rates.brokerage_per_order}/order, STT ${(r.costs.rates.stt_sell * 100).toFixed(3)}% sell, exchange ${(r.costs.rates.exchange_txn * 100).toFixed(5)}%, stamp ${(r.costs.rates.stamp_buy * 100).toFixed(3)}% buy, SEBI, GST ${(r.costs.rates.gst * 100).toFixed(0)}%">Brokerage, STT, exchange, SEBI, stamp duty and GST at current Indian F&amp;O rates (hover for rates).</p></div>` : ""}
+      </div><p class="muted" title="${feeTitle(r.costs.rates)}">Commission plus ORF, OCC, FINRA TAF and SEC fees (hover for rates; change them in Settings).</p></div>` : ""}
       <div class="card"><h3>Legs as priced</h3><ul class="actions">${legs}</ul></div>`;
   }
 
@@ -330,7 +341,10 @@
         allow_unlimited_loss: $("#opt-unlimited").checked,
         max_legs: Number($("#opt-maxlegs").value) || 4,
         max_lots_per_leg: Number($("#opt-maxlots").value) || 3,
+        max_spread_pct: Number($("#opt-spread").value) || 10,
+        robust: $("#opt-robust").checked,
       },
+      search: $("#opt-global").checked ? "global" : "local",
       distribution: { mode: $("#opt-dist").value, drift: (Number($("#opt-drift").value) || 0) / 100 },
       fill: $("#tpl-fill").value === "ltp" ? "market" : $("#tpl-fill").value,
     };
@@ -362,6 +376,7 @@
         ${cmpRow("Charges", a.charges, b.charges, (v) => fmt(v), false)}
       </tbody></table></div>
       <p><b>Legs:</b> ${out.best.legs.map((l) => esc(legLine(l))).join(", ")}</p>
+      ${out.seeds ? `<p class="muted">Searched from: ${out.seeds.map(esc).join(", ")}${out.rejected_illiquid ? ` · skipped ${out.rejected_illiquid} candidates with spreads over ${out.prefs.max_spread_pct}%` : ""}</p>` : ""}
       ${out.steps.length ? `<p class="muted">How it got there (${out.evaluated} live-priced candidates tried):</p>
         <ol class="opt-steps">${out.steps.map((s, i) => `<li data-step="${i}">${esc(s.move)} <span class="muted">→ score ${s.score == null ? "–" : s.score.toFixed(3)}, win ${pctv(s.metrics && s.metrics.win_rate)}</span></li>`).join("")}</ol>` : ""}
       <div class="row">
@@ -409,9 +424,10 @@
 
   async function optimise() {
     const btn = $("#opt-run");
-    if (!App.chain || !state.legs.length) { App.showBanner("Add at least one leg (or pick a strategy) before optimising."); return; }
+    if (!App.chain) { App.showBanner("Load a live option chain first."); return; }
+    if (!state.legs.length && !$("#opt-global").checked) { App.showBanner("Add at least one leg, or tick “Search all strategy types”."); return; }
     btn.disabled = true; btn.textContent = "Optimising…";
-    $("#opt-result").innerHTML = '<p class="muted">Searching nearby strategies on live prices…</p>';
+    $("#opt-result").innerHTML = `<p class="muted">${$("#opt-global").checked ? "Searching every strategy type" : "Searching nearby strategies"} on live prices…</p>`;
     document.getElementById("opt-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
     try {
       optOut = await api("/api/strategy/optimize", { method: "POST", body: JSON.stringify(optBody()) });

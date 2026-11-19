@@ -6,29 +6,44 @@
   <script>
     // Apply the saved theme before first paint (dark unless the user picked light).
     try { if (localStorage.getItem("ot-theme") === "light") document.documentElement.dataset.theme = "light"; } catch (_) {}
+    // Visual effects: on unless switched off or the system asks for reduced motion.
+    try {
+      const fx = localStorage.getItem("ot-fx");
+      const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (fx === "0" || (fx === null && reduced)) document.documentElement.classList.add("fx-off");
+    } catch (_) {}
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Option Trader</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23121821%22/%3E%3Cpath d=%22M4 24 L12 14 L18 19 L28 7%22 stroke=%22%2322c55e%22 stroke-width=%223%22 fill=%22none%22/%3E%3C/svg%3E">
+  <link rel="preload" href="/static/vendor/fonts/orbitron-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+<div id="boot" class="boot hidden" aria-hidden="true">
+  <div class="boot-inner">
+    <div class="boot-logo">OPTION<span>//</span>TRADER</div>
+    <pre id="boot-log"></pre>
+    <div class="boot-bar"><i></i></div>
+    <div class="boot-skip">press any key to skip</div>
+  </div>
+</div>
 <header class="topbar">
-  <div class="brand">Option Trader</div>
+  <div class="brand" data-text="OPTION//TRADER">Option<span class="slash">//</span>Trader</div>
   <form id="controls" class="controls" autocomplete="off">
     <label>Symbol
-      <input id="symbol" list="symbols" value="NIFTY" required>
+      <input id="symbol" list="symbols" value="SPY" required>
       <datalist id="symbols">
-        <option>NIFTY</option><option>BANKNIFTY</option><option>FINNIFTY</option>
-        <option>MIDCPNIFTY</option><option>RELIANCE</option><option>HDFCBANK</option>
-        <option>ICICIBANK</option><option>INFY</option><option>TCS</option><option>SBIN</option>
+        <option>SPY</option><option>QQQ</option><option>IWM</option><option>SPX</option><option>NDX</option>
+        <option>RUT</option><option>VIX</option><option>AAPL</option><option>MSFT</option><option>NVDA</option>
+        <option>TSLA</option><option>AMZN</option><option>META</option><option>GOOGL</option><option>AMD</option>
       </datalist>
     </label>
     <label>Expiry <select id="expiry"></select></label>
     <label>Source
       <select id="source">
-        <option value="">Auto</option><option value="nse">NSE</option>
-        <option value="angelone">Angel One</option><option value="yahoo">Yahoo</option>
+        <option value="">Auto</option><option value="tradier">Tradier</option>
+        <option value="cboe">Cboe</option><option value="yahoo">Yahoo</option>
       </select>
     </label>
     <button type="submit" class="primary">Load</button>
@@ -39,9 +54,11 @@
       </select></label>
   </form>
   <div class="status">
+    <button id="qt-open" class="qt-btn" type="button" title="Answer 3 questions and get a ready-made trade (Q)">⚡ Quick trade</button>
+    <button id="fx-toggle" class="fx-toggle" type="button" title="Turn visual effects (animations, scanlines) on or off">FX</button>
     <button id="theme-toggle" class="theme-toggle" type="button" title="Switch light/dark theme">☀️</button>
     <span id="live-badge" class="pill bearish" title="Real-time exchange ticks">Snapshot</span>
-    <span id="market-badge" class="pill neutral" title="NSE trading session">market…</span>
+    <span id="market-badge" class="pill neutral" title="US options trading session (NYSE calendar)">market…</span>
     <span id="online-dot" class="dot"></span><span id="online-text">checking…</span>
   </div>
 </header>
@@ -49,20 +66,56 @@
 <div id="ticker" class="ticker" aria-label="Market indices"></div>
 <div id="banner" class="banner hidden"></div>
 
-<nav class="tabs">
-  <button class="tab active" data-tab="chain">Option Chain</button>
-  <button class="tab" data-tab="watchlist">Watchlist</button>
-  <button class="tab" data-tab="charts">Charts</button>
-  <button class="tab" data-tab="signals">Signals &amp; Ideas</button>
-  <button class="tab" data-tab="builder">Strategy Builder</button>
-  <button class="tab" data-tab="screener">Screener</button>
-  <button class="tab" data-tab="portfolio">Paper Portfolio</button>
-  <button class="tab" data-tab="alerts">Alerts <span id="alert-count" class="pill neutral hidden">0</span></button>
+<div class="shell" id="shell">
+<nav class="tabs sidebar neon-panel" aria-label="Sections">
+  <div class="side-title"><span class="glyph">NAV</span><span class="slash">//</span><span class="glyph">SYS</span></div>
+  <button class="tab active" data-tab="chain" title="Option Chain (key 1)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18M3 12h18M3 19h18M9 3v18M15 3v18"/></svg><span class="lbl">Option Chain</span><kbd>1</kbd>
+  </button>
+  <button class="tab" data-tab="watchlist" title="Watchlist (key 2)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Watchlist</span><kbd>2</kbd>
+  </button>
+  <button class="tab" data-tab="charts" title="Charts (key 3)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg><span class="lbl">Charts</span><kbd>3</kbd>
+  </button>
+  <button class="tab" data-tab="signals" title="Signals & Ideas (key 4)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span class="lbl">Signals &amp; Ideas</span><kbd>4</kbd>
+  </button>
+  <button class="tab" data-tab="builder" title="Strategy Builder (key 5)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg><span class="lbl">Strategy Builder</span><kbd>5</kbd>
+  </button>
+  <button class="tab" data-tab="screener" title="Screener (key 6)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg><span class="lbl">Screener</span><kbd>6</kbd>
+  </button>
+  <button class="tab" data-tab="portfolio" title="Paper Portfolio (key 7)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="1"/><path d="M8 7V4h8v3"/></svg><span class="lbl">Paper Portfolio</span><kbd>7</kbd>
+  </button>
+  <button class="tab" data-tab="alerts" title="Alerts (key 8)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span class="lbl">Alerts</span> <span id="alert-count" class="pill neutral hidden">0</span><kbd>8</kbd>
+  </button>
+  <button class="tab" data-tab="settings" title="Settings &amp; connections (key 9)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="lbl">Settings</span><kbd>9</kbd>
+  </button>
+  <button class="tab" data-tab="valuation" title="Valuation Lab (key 0)">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4 19a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 19l-6-10V3"/><path d="M7 14h10"/></svg><span class="lbl">Valuation Lab</span><kbd>0</kbd>
+  </button>
+  <div class="side-foot">
+    <button type="button" id="tour-open" class="side-btn" title="Take the 1-minute guided tour">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg><span class="lbl">Guide</span><kbd>?</kbd>
+    </button>
+    <button type="button" id="cmd-open" class="side-btn" title="Command palette (Ctrl+K)">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-5-6-5M12 19h8"/></svg><span class="lbl">Commands</span><kbd>Ctrl K</kbd>
+    </button>
+    <button type="button" id="side-collapse" class="side-btn" title="Collapse side panel ([)">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg><span class="lbl">Collapse</span><kbd>[</kbd>
+    </button>
+  </div>
 </nav>
 
 <main>
   <section id="tab-chain" class="panel active">
     <div class="meta" id="chain-meta"></div>
+    <p id="chain-summary" class="summary"></p>
     <div class="row chain-tools">
       <label>Strikes around ATM
         <select id="strike-window">
@@ -77,6 +130,9 @@
       <label class="inline"><input type="checkbox" data-col="greeks" checked> Delta</label>
       <label class="inline"><input type="checkbox" data-col="greeks2"> Gamma/Theta/Vega</label>
       <label class="inline"><input type="checkbox" data-col="quote" checked> Bid/Ask</label>
+      <label class="inline" title="Shade IV cells: deeper colour = higher implied volatility"><input type="checkbox" id="iv-heat"> IV heat</label>
+      <button id="verify-btn" type="button" title="Compare this chain with a second, independent data source">Cross-check</button>
+      <label class="inline" title="Cross-check automatically every 2 minutes while the market is open"><input type="checkbox" id="verify-auto"> Auto</label>
       <button id="jump-atm" type="button">Jump to ATM</button>
       <button id="export-csv" type="button">Export CSV</button>
     </div>
@@ -102,7 +158,7 @@
 
   <section id="tab-watchlist" class="panel">
     <form id="wl-form" class="row" autocomplete="off">
-      <label>Add symbol <input id="wl-add" list="symbols" placeholder="e.g. RELIANCE"></label>
+      <label>Add symbol <input id="wl-add" list="symbols" placeholder="e.g. AAPL"></label>
       <button type="submit">Add</button>
       <button type="button" id="wl-refresh" class="primary">Refresh</button>
       <span id="wl-status" class="muted"></span>
@@ -121,7 +177,23 @@
       <div class="card"><h3>Change in open interest</h3><div id="ch-oichg" class="chart"></div></div>
       <div class="card"><h3>IV smile</h3><div id="ch-smile" class="chart"></div></div>
       <div class="card"><h3>IV term structure <button id="load-term" class="small-btn">Load</button></h3><div id="ch-term" class="chart"><p class="muted">Fetches the next expiries' live chains. Press Load.</p></div></div>
-      <div class="card wide"><h3>Intraday: spot, PCR and ATM IV</h3><div id="ch-intraday" class="chart"></div>
+      <div class="card wide"><h3>Volatility surface &amp; skew <button id="load-surface" class="small-btn">Load</button></h3>
+        <div id="vs-summary" class="kv-strip"></div>
+        <div class="chart-grid">
+          <div><div id="ch-surface" class="chart"><p class="muted">Implied volatility across strikes and expiries from the live chains, with 25-delta skew and IV rank. Press Load.</p></div></div>
+          <div><div class="table-wrap"><table class="simple" id="vs-table"><thead><tr><th>Expiry</th><th>Days</th><th>ATM IV</th><th title="25-delta call IV minus 25-delta put IV">RR 25Δ</th><th title="Average of the 25-delta wings minus ATM">BF 25Δ</th><th>25Δ put</th><th>25Δ call</th></tr></thead><tbody></tbody></table></div>
+            <div id="vs-hist" class="chart short"></div></div>
+        </div>
+        <p class="muted" id="vs-note">IV rank compares today's 30-day IV with the past year recorded by this app (Cboe's published IV30 when available).</p></div>
+      <div class="card wide"><h3>Dealer gamma exposure <button id="load-gex" class="small-btn">Load</button>
+          <select id="gex-exp" class="small-sel" title="How many expiries to include"><option value="1">This expiry</option><option value="4" selected>Next 4 expiries</option><option value="8">Next 8</option></select></h3>
+        <div id="gex-summary" class="kv-strip"></div>
+        <div id="ch-gex" class="chart tall"><p class="muted">Estimates how market makers' hedging pushes the price, from live open interest. Press Load.</p></div>
+        <p class="muted">Assumes customers sell calls and buy puts (the usual convention), so dealers are long calls and short puts. Positive gamma damps moves; negative gamma amplifies them.</p></div>
+      <div class="card wide"><h3>Unusual options activity <button id="load-flow" class="small-btn">Scan</button></h3>
+        <div id="flow-summary" class="muted">Contracts trading far more than their open interest, ranked by dollars traded, across the next 4 expiries.</div>
+        <div class="table-wrap"><table class="simple" id="flow-table"><thead><tr><th>Expiry</th><th>Strike</th><th>Type</th><th>Volume</th><th>OI</th><th>Vol/OI</th><th>Price</th><th>Premium</th><th>Traded at</th><th>Read</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="card wide"><h3>Intraday: spot, PCR and ATM IV</h3><div id="ch-intraday" class="chart tall"></div>
         <p class="muted">Recorded from each live fetch while the app is running (resets daily and on restart).</p></div>
     </div>
   </section>
@@ -129,8 +201,9 @@
   <section id="tab-signals" class="panel">
     <div class="row">
       <button id="load-signals" class="primary">Analyse now</button>
-      <label class="inline">Lots <input id="idea-lots" type="number" min="1" value="1" class="small"></label>
+      <label class="inline" title="Contracts per leg (each covers 100 shares)">Contracts <input id="idea-lots" type="number" min="1" value="1" class="small"></label>
     </div>
+    <div id="events-out"></div>
     <div id="signals-out"><p class="muted">Press “Analyse now” to compute signals and trade ideas from the live chain and price history.</p></div>
   </section>
 
@@ -142,7 +215,7 @@
           <label>Strategy <select id="tpl-select"></select></label>
           <p id="tpl-desc" class="muted"></p>
           <div class="row">
-            <label>Lots <input id="tpl-lots" type="number" min="1" value="1" class="small"></label>
+            <label title="Contracts per leg (each covers 100 shares)">Contracts <input id="tpl-lots" type="number" min="1" value="1" class="small"></label>
             <label title="Multiply the distance between strikes">Width <input id="tpl-width" type="number" min="1" value="1" class="small"></label>
             <label title="Move all strikes up/down by N strikes">ATM shift <input id="tpl-shift" type="number" value="0" class="small"></label>
             <label>Fill
@@ -161,7 +234,7 @@
         <div class="card">
           <h3>2. Edit legs</h3>
           <div class="table-wrap"><table class="legs">
-            <thead><tr><th>Side</th><th>Type</th><th>Expiry</th><th>Strike</th><th>Lots</th><th title="Leave blank to use the live price">Entry price</th><th>Live</th><th></th></tr></thead>
+            <thead><tr><th>Side</th><th>Type</th><th>Expiry</th><th>Strike</th><th>Contracts</th><th title="Leave blank to use the live price">Entry price</th><th>Live</th><th></th></tr></thead>
             <tbody id="legs-body"></tbody>
           </table></div>
           <div class="row">
@@ -177,9 +250,9 @@
             <div class="slider-ends"><span>Higher win rate</span><span>Higher profit</span></div>
             <input id="opt-goal" type="range" min="0" max="100" step="5" value="50"></label>
           <div class="row">
-            <label>Max loss (₹) <input id="opt-maxloss" type="number" min="0" step="500" placeholder="no limit" style="width:110px"></label>
+            <label>Max loss ($) <input id="opt-maxloss" type="number" min="0" step="500" placeholder="no limit" style="width:110px"></label>
             <label>Max legs <input id="opt-maxlegs" type="number" min="1" max="6" value="4" class="small"></label>
-            <label>Max lots/leg <input id="opt-maxlots" type="number" min="1" max="20" value="3" class="small"></label>
+            <label>Max contracts/leg <input id="opt-maxlots" type="number" min="1" max="20" value="3" class="small"></label>
           </div>
           <div class="row">
             <label>Price model
@@ -192,6 +265,11 @@
             </label>
             <label title="Your expected move by expiry; 0 = no view">My view (% by expiry) <input id="opt-drift" type="number" step="0.5" value="0" class="small"></label>
             <label class="inline"><input type="checkbox" id="opt-unlimited"> Allow unlimited loss</label>
+          </div>
+          <div class="row">
+            <label class="inline" title="Also start from every built-in and saved strategy, not just your legs"><input type="checkbox" id="opt-global" checked> Search all strategy types</label>
+            <label class="inline" title="Score must hold up if the market drifts half a standard deviation either way"><input type="checkbox" id="opt-robust" checked> Robust</label>
+            <label title="Skip contracts with a wider bid/ask spread">Max spread % <input id="opt-spread" type="number" min="0.5" step="0.5" value="10" class="small"></label>
           </div>
           <div id="opt-result"></div>
         </div>
@@ -234,8 +312,8 @@
       <label>View
         <select id="sc-view"><option value="any">Any</option><option>bullish</option><option>bearish</option><option>neutral</option><option>volatile</option></select>
       </label>
-      <label>Lots <input id="sc-lots" type="number" min="1" value="1" class="small"></label>
-      <label>Max loss (₹) <input id="sc-maxloss" type="number" min="0" step="500" placeholder="any" class="small" style="width:100px"></label>
+      <label title="Contracts per leg">Contracts <input id="sc-lots" type="number" min="1" value="1" class="small"></label>
+      <label>Max loss ($) <input id="sc-maxloss" type="number" min="0" step="500" placeholder="any" class="small" style="width:100px"></label>
       <label>Min prob. of profit % <input id="sc-pop" type="number" min="0" max="100" value="0" class="small"></label>
       <label>Sort by
         <select id="sc-sort"><option value="score">Overall score</option><option value="pop">Prob. of profit</option>
@@ -263,6 +341,81 @@
     <div id="pf-list"><p class="muted">No paper positions yet. Build a strategy and press “Paper trade this”.</p></div>
     <p class="muted">Paper trades are opened, valued and closed at live chain prices. No real orders are placed.</p>
   </section>
+  <section id="tab-valuation" class="panel">
+    <form id="vl-form" class="row" autocomplete="off">
+      <label>Strike <select id="vl-strike"></select></label>
+      <label>Type <select id="vl-kind"><option value="CE">Call</option><option value="PE">Put</option></select></label>
+      <label title="Leave blank to use the contract's own market implied volatility">Volatility % <input id="vl-sigma" type="number" step="0.1" min="0.5" max="500" placeholder="market IV" class="small"></label>
+      <label title="More paths = smaller Monte Carlo error, slower">MC paths
+        <select id="vl-paths"><option value="20000">20k</option><option value="100000" selected>100k</option><option value="400000">400k</option></select>
+      </label>
+      <button type="submit" class="primary">Value contract</button>
+      <span id="vl-status" class="muted"></span>
+    </form>
+    <p class="muted">Prices the selected live contract with 11 models (closed form, stochastic volatility, trees, American approximations and Monte Carlo) and compares each with the live bid/ask. Inputs come from the chain: spot, the put-call-parity forward, the Treasury rate and the contract's implied volatility.</p>
+    <div id="vl-inputs" class="kv-strip"></div>
+    <div class="chart-grid">
+      <div class="card wide"><h3>Model prices vs the market</h3>
+        <div class="table-wrap"><table class="simple" id="vl-table">
+          <thead><tr><th>Model</th><th>Type</th><th>Value</th><th title="Model value minus market mid">vs mid</th><th>In bid/ask?</th><th title="95% confidence interval (Monte Carlo)">95% CI</th><th>Time</th><th>Notes</th></tr></thead>
+          <tbody><tr><td colspan="8" class="muted">Load a chain, pick a contract and press “Value contract”.</td></tr></tbody>
+        </table></div>
+        <p id="vl-explain" class="hint"></p>
+      </div>
+      <div class="card"><h3>Values against the bid/ask</h3><div id="vl-bars" class="chart"></div></div>
+      <div class="card"><h3>Heston fit to this expiry's smile</h3><div id="vl-smile" class="chart"></div><div id="vl-heston" class="muted"></div></div>
+      <div class="card wide"><h3>Convergence: binomial tree and Monte Carlo</h3><div id="vl-conv" class="chart"></div>
+        <p class="muted">The tree approaches the exact value as steps increase; Monte Carlo's 95% band narrows with the square root of the paths.</p></div>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="panel">
+    <div class="cards settings-grid">
+      <div class="card">
+        <h3>1. Check your connections</h3>
+        <p class="muted">Tests the internet, Cboe, Tradier and Yahoo Finance from this computer and tells you how to fix anything that fails.</p>
+        <div class="row"><button id="st-test" class="primary" type="button">Test connections</button></div>
+        <div id="st-test-out"></div>
+      </div>
+      <div class="card">
+        <h3>2. Tradier (for real-time, tick-by-tick prices)</h3>
+        <p class="muted">Optional. Without it the app uses Cboe's free quotes (about 15 minutes delayed). A Tradier brokerage account gives a free real-time API token (Tradier dashboard → API Access). A developer sandbox token works too, but is delayed. Saved only on this computer in a private file.</p>
+        <div id="st-tradier-status" class="muted"></div>
+        <label>API token <input id="st-token" type="password" autocomplete="off" spellcheck="false" placeholder="leave blank to keep the saved token"></label>
+        <label class="inline"><input type="checkbox" id="st-sandbox"> This is a sandbox (developer) token</label>
+        <div class="row"><button id="st-tradier-save" class="primary" type="button">Save Tradier token</button>
+          <button id="st-tradier-clear" class="danger" type="button">Remove</button></div>
+      </div>
+      <div class="card">
+        <h3>3. Data sources</h3>
+        <p class="muted">The app tries these in order and uses the first that answers with fresh data.</p>
+        <ol id="st-sources" class="st-sources"></ol>
+        <label class="inline"><input type="checkbox" id="st-live"> Stream real-time ticks from Tradier when available</label>
+        <div class="row">
+          <label>Refresh cache (s) <input id="st-ttl" type="number" min="1" max="600" class="small"></label>
+          <label>Stale after (s) <input id="st-stale" type="number" min="10" max="3600" class="small"></label>
+          <label>Risk-free rate % <input id="st-rate" type="number" step="0.05" min="0" max="30" class="small"></label>
+        </div>
+      </div>
+      <div class="card">
+        <h3>4. Trading fees</h3>
+        <p class="muted">Used for net P&amp;L. Set the commission to your broker's; regulatory fees are passed through by every US broker. Blank = default.</p>
+        <div class="row">
+          <label title="Broker commission per option contract">Commission $/contract <input id="st-OPTION_TRADER_COMMISSION_PER_CONTRACT" type="number" step="0.01" min="0" class="small" placeholder="0.65"></label>
+          <label title="Flat ticket charge per order (most brokers: 0)">$/order <input id="st-OPTION_TRADER_COMMISSION_PER_ORDER" type="number" step="0.01" min="0" class="small" placeholder="0"></label>
+          <label title="Options Regulatory Fee per contract, buys and sells">ORF $/contract <input id="st-OPTION_TRADER_ORF" type="number" step="0.0001" min="0" class="small" style="width:90px" placeholder="0.0229"></label>
+        </div>
+        <div class="row">
+          <label title="Options Clearing Corporation fee per contract">OCC $/contract <input id="st-OPTION_TRADER_OCC_FEE" type="number" step="0.001" min="0" class="small" placeholder="0.02"></label>
+          <label title="FINRA Trading Activity Fee per contract sold (capped at $8.30 per trade)">FINRA TAF $/contract sold <input id="st-OPTION_TRADER_FINRA_TAF" type="number" step="0.00001" min="0" class="small" style="width:90px" placeholder="0.00279"></label>
+          <label title="SEC Section 31 fee as a fraction of sale proceeds (27.80 per million = 0.0000278)">SEC fee (fraction of sales) <input id="st-OPTION_TRADER_SEC_FEE" type="number" step="0.0000001" min="0" class="small" style="width:110px" placeholder="0.0000278"></label>
+        </div>
+        <div class="row"><button id="st-save" class="primary" type="button">Save settings</button><span id="st-msg" class="muted"></span></div>
+        <p class="muted" id="st-dir"></p>
+      </div>
+    </div>
+  </section>
+
   <section id="tab-alerts" class="panel">
     <form id="al-form" class="row" autocomplete="off">
       <label>Symbol <input id="al-symbol" list="symbols" placeholder="current" class="small" style="width:120px"></label>
@@ -273,7 +426,7 @@
         </select>
       </label>
       <label class="al-ltp hidden">Strike <input id="al-strike" type="number" step="any" class="small" style="width:100px"></label>
-      <label class="al-ltp hidden">Type <select id="al-type"><option>CE</option><option>PE</option></select></label>
+      <label class="al-ltp hidden">Type <select id="al-type"><option value="CE">Call</option><option value="PE">Put</option></select></label>
       <label>is
         <select id="al-op"><option value="above">above</option><option value="below">below</option></select>
       </label>
@@ -288,10 +441,57 @@
     <p class="muted">Alerts are checked against live data each time the chain for that symbol refreshes while this page is open (every 30 s in market hours). Each alert fires once; re-arm it to watch again.</p>
   </section>
 </main>
+
+<aside class="hud-panel neon-panel" id="hud-panel" aria-label="Live status">
+  <div class="side-title"><span class="glyph">HUD</span><span class="slash">//</span><span class="glyph">LIVE</span>
+    <button type="button" id="hud-collapse" class="icon-btn" title="Hide this panel (])">×</button></div>
+  <div class="hud-clock"><span id="hud-time">--:--:--</span><small>ET</small></div>
+  <div class="hud-grid">
+    <div>Market</div><div id="hud-market">–</div>
+    <div>Price feed</div><div id="hud-feed">–</div>
+    <div>Data age</div><div id="hud-age">–</div>
+    <div>Source</div><div id="hud-source">–</div>
+  </div>
+  <div class="hud-sep"></div>
+  <div class="hud-symbol"><span id="hud-symbol">–</span><span id="hud-spot" class="hud-big">–</span><span id="hud-move"></span></div>
+  <div class="hud-grid">
+    <div>Forward</div><div id="hud-forward">–</div>
+    <div>ATM strike</div><div id="hud-atm">–</div>
+    <div>ATM IV</div><div id="hud-iv">–</div>
+    <div>PCR (OI)</div><div id="hud-pcr">–</div>
+    <div>Expiry</div><div id="hud-expiry">–</div>
+    <div>Multiplier</div><div id="hud-lot">–</div>
+  </div>
+  <div class="hud-sep"></div>
+  <div class="hud-keys">
+    <div class="muted">Shortcuts</div>
+    <div><kbd>1</kbd>–<kbd>0</kbd> sections</div>
+    <div><kbd>/</kbd> symbol · <kbd>R</kbd> refresh</div>
+    <div><kbd>O</kbd> optimise · <kbd>Q</kbd> quick trade</div>
+    <div><kbd>Ctrl K</kbd> commands · <kbd>?</kbd> help</div>
+  </div>
+</aside>
+<button type="button" id="hud-reopen" class="hud-reopen hidden" title="Show live status panel (])">HUD</button>
+</div>
+
+<div id="qt" class="cmd hidden" role="dialog" aria-modal="true" aria-label="Quick trade">
+  <div class="qt-box neon-panel">
+    <div class="qt-head"><span class="qt-title">Quick trade</span><span id="qt-sym" class="muted"></span><button type="button" id="qt-close" class="icon-btn" title="Close (Esc)">×</button></div>
+    <div id="qt-body"></div>
+  </div>
+</div>
+
+<div id="cmd" class="cmd hidden" role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="cmd-box neon-panel">
+    <input id="cmd-input" placeholder="Type a command or a symbol, e.g. “spx”, “aapl”, “optimise”, “valuation”…" autocomplete="off">
+    <ul id="cmd-list"></ul>
+    <div class="muted cmd-hint">↑↓ to choose · Enter to run · Esc to close</div>
+  </div>
+</div>
 <div id="toasts" class="toasts"></div>
 
 <footer class="foot">
-  Live data from NSE, Angel One SmartAPI or Yahoo Finance. Not investment advice.
+  US options data from Tradier, Cboe or Yahoo Finance. Not investment advice.
 </footer>
 
 <script src="/static/vendor/plotly-2.35.2.min.js"></script>
@@ -302,5 +502,14 @@
 <script src="/static/portfolio.js"></script>
 <script src="/static/screener.js"></script>
 <script src="/static/alerts.js"></script>
+<script src="/static/hud.js"></script>
+<script src="/static/guide.js"></script>
+<script src="/static/fx.js"></script>
+<script src="/static/settings.js"></script>
+<script src="/static/quicktrade.js"></script>
+<script src="/static/valuation.js"></script>
+<script src="/static/events.js"></script>
+<script src="/static/positioning.js"></script>
+<script src="/static/volsurface.js"></script>
 </body>
 </html>

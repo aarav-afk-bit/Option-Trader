@@ -8,11 +8,11 @@ from option_trader.portfolio.store import PortfolioStore, exit_price, mark_to_ma
 from option_trader.errors import DataUnavailableError
 from option_trader.models import OptionQuote
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 
 def chain_for(exp=None):
-    return RecordedNSEProvider().get_option_chain("NIFTY", exp)
+    return RecordedProvider().get_option_chain("NDX", exp)
 
 
 LEGS = [{"option_type": "CE", "action": "BUY", "strike": 25000, "lots": 2},
@@ -23,7 +23,7 @@ def test_open_prices_from_live_chain(tmp_path):
     st = PortfolioStore(tmp_path / "p.json")
     pos = st.open("Bull", chain_for, LEGS, fill="market")
     assert [l["entry"] for l in pos["legs"]] == [145.5, 91.5]  # pay ask, receive bid
-    assert pos["lot_size"] == 75 and pos["source"] == "nse"
+    assert pos["lot_size"] == 100 and pos["source"] == "cboe"
     assert st.list()[0]["id"] == pos["id"]
 
 
@@ -31,12 +31,12 @@ def test_mark_and_close(tmp_path, monkeypatch):
     st = PortfolioStore(tmp_path / "p.json")
     pos = st.open("Bull", chain_for, LEGS, fill="ltp")
     m = mark_to_market(pos, chain_for)
-    # marks at bid/ask mid: 145.0 and 92.0 -> (145-145)*150 - (92-92)*75 = 0
+    # marks at bid/ask mid: 145.0 and 92.0 -> (145-145)*200 - (92-92)*100 = 0
     assert m["pnl"] == pytest.approx(0)
     monkeypatch.setattr("option_trader.portfolio.store.date", _FixedDate)
     closed = st.close(pos["id"], chain_for, fill="market")
     # exit: sell 25000CE at bid 144.5, buy back 25100CE at ask 92.5
-    assert closed["realized_pnl"] == pytest.approx((144.5 - 145.0) * 150 - (92.5 - 92.0) * 75)
+    assert closed["realized_pnl"] == pytest.approx((144.5 - 145.0) * 200 - (92.5 - 92.0) * 100)
     with pytest.raises(ValueError):
         st.close(pos["id"], chain_for)
 
@@ -59,14 +59,14 @@ def test_exit_price_side():
 
 
 def test_api_flow(tmp_path):
-    client = TestClient(create_app(manager_with(RecordedNSEProvider()),
+    client = TestClient(create_app(manager_with(RecordedProvider()),
                                    portfolio_store=PortfolioStore(tmp_path / "p.json")))
-    r = client.post("/api/portfolio/open", json={"name": "S", "symbol": "NIFTY", "legs": LEGS})
+    r = client.post("/api/portfolio/open", json={"name": "S", "symbol": "NDX", "legs": LEGS})
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
     d = client.get("/api/portfolio").json()
     assert d["positions"][0]["pnl"] is not None and d["open_pnl"] is not None
-    bad = client.post("/api/portfolio/open", json={"symbol": "NIFTY", "legs": [
+    bad = client.post("/api/portfolio/open", json={"symbol": "NDX", "legs": [
         {"option_type": "CE", "action": "BUY", "strike": 1}]})
     assert bad.status_code == 422
     assert client.delete(f"/api/portfolio/{pid}").status_code == 200

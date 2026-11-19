@@ -9,16 +9,33 @@ from pathlib import Path
 from option_trader.errors import DataUnavailableError
 from option_trader.providers.base import DataProvider
 from option_trader.providers.manager import ProviderManager
-from option_trader.providers.nse import parse_chain_payload
+from option_trader.models import CONTRACT_MULTIPLIER, OptionChain, OptionQuote, StrikeRow, utcnow
 
 FIX = Path(__file__).parent / "fixtures"
 FIXTURE_EXPIRY = date(2026, 10, 27)
 
 
-class RecordedNSEProvider(DataProvider):
-    """Replays the recorded NSE fixture payload."""
+def recorded_chain(symbol: str = "NDX", expiry: date | None = None, source: str = "cboe") -> OptionChain:
+    """The recorded chain fixture as an OptionChain (test-only)."""
+    data = json.loads((FIX / "recorded_chain.json").read_text())
+    expiry = expiry or FIXTURE_EXPIRY
+    rows = []
+    for r in data["rows"]:
+        if r["expiry"] != expiry.isoformat():
+            continue
+        k = float(r["strike"])
+        mk = lambda q, t: OptionQuote(k, t, expiry, **{f: v for f, v in q.items() if v is not None})
+        rows.append(StrikeRow(k, mk(r["call"], "CE"), mk(r["put"], "PE")))
+    ch = OptionChain(symbol.upper(), expiry, data["spot"], rows, source, utcnow(),
+                     exchange_timestamp=data["exchange_timestamp"], lot_size=CONTRACT_MULTIPLIER,
+                     expiries=[date.fromisoformat(e) for e in data["expiries"]])
+    return ch.validate()
 
-    name = "nse"
+
+class RecordedProvider(DataProvider):
+    """Replays the recorded chain fixture."""
+
+    name = "cboe"
 
     def __init__(self, candles=None):
         self.calls = 0
@@ -34,10 +51,7 @@ class RecordedNSEProvider(DataProvider):
 
     def get_option_chain(self, symbol, expiry=None):
         self.calls += 1
-        payload = json.loads((FIX / "nse_legacy.json").read_text())
-        ch = parse_chain_payload(payload, symbol.upper(), expiry or FIXTURE_EXPIRY)
-        ch.lot_size = 75
-        return ch
+        return recorded_chain(symbol, expiry, self.name)
 
 
 def trending_candles(n=260, start=100.0, drift=0.002, seed=7):

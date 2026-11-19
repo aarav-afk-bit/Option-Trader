@@ -21,11 +21,12 @@ from ..config import Settings, get_settings
 from ..errors import DataUnavailableError
 from ..models import Candle, OptionChain, utcnow
 from ..pricing import enrich_chain
+from ..quality import report, sanitize, validate
 from .base import DataProvider, normalize_symbol
 
 log = logging.getLogger(__name__)
 
-CONNECTIVITY_HOSTS = (("www.nseindia.com", 443), ("query1.finance.yahoo.com", 443), ("1.1.1.1", 443))
+CONNECTIVITY_HOSTS = (("cdn.cboe.com", 443), ("query1.finance.yahoo.com", 443), ("1.1.1.1", 443))
 
 
 def check_online(timeout: float = 3.0) -> bool:
@@ -58,6 +59,10 @@ class ProviderManager:
     risk_free_rate: float = 0.065
     stale_seconds: float = 180.0
     live: Optional[object] = None  # LiveHub when real-time ticks are available
+    curve: Optional[object] = None  # TreasuryCurve for term-matched rates
+    events: Optional[object] = None  # EventsService (earnings & dividends)
+    oi_history: Optional[object] = None  # OIHistory (day-over-day open interest change)
+    iv_history: Optional[object] = None  # IVHistory (daily IV30 for IV rank)
     online_check: Callable[[], bool] = check_online
     health: dict[str, ProviderHealth] = field(default_factory=dict)
 
@@ -76,25 +81,37 @@ class ProviderManager:
 
     @classmethod
     def from_settings(cls, settings: Optional[Settings] = None) -> "ProviderManager":
-        from .angelone import AngelOneProvider
-        from .nse import NSEProvider
+        from .cboe import CboeProvider
+        from .tradier import TradierProvider
         from .yahoo import YahooProvider
 
         settings = settings or get_settings()
         factories = {
-            "nse": NSEProvider,
+            "tradier": lambda: TradierProvider.from_settings(settings),
+            "cboe": CboeProvider,
             "yahoo": YahooProvider,
-            "angelone": lambda: AngelOneProvider(settings),
         }
         mgr = cls([factories[name]() for name in settings.providers], cache_ttl=settings.cache_ttl,
                   risk_free_rate=settings.risk_free_rate, stale_seconds=settings.stale_seconds)
-        angel = next((p for p in mgr.providers if p.name == "angelone" and p.is_configured()), None)
-        if angel is None and settings.angel_configured:
-            angel = AngelOneProvider(settings)  # stream ticks even if Angel isn't a snapshot source
-        if angel is not None and settings.live_ticks:
-            from ..live import LiveHub
+        from ..rates import TreasuryCurve
 
-            mgr.live = LiveHub(angel, risk_free_rate=settings.risk_free_rate)
+        mgr.curve = TreasuryCurve(settings.data_dir, settings.risk_free_rate)
+        from ..events import EventsService
+
+        mgr.events = EventsService()
+        from ..oi_history import OIHistory
+
+        mgr.oi_history = OIHistory(settings.data_dir)
+        from ..iv_history import IVHistory
+
+        mgr.iv_history = IVHistory(settings.data_dir)
+        tradier = next((p for p in mgr.providers if p.name == "tradier" and p.is_configured()), None)
+        if tradier is None and settings.tradier_configured:
+            tradier = TradierProvider.from_settings(settings)  # stream even if not a snapshot source
+        if tradier is not None and settings.live_ticks and not tradier.sandbox:
+            from ..live import TradierLiveHub
+
+            mgr.live = TradierLiveHub(tradier, risk_free_rate=settings.risk_free_rate)
         return mgr
 
     # -- helpers ----------------------------------------------------------------------------
@@ -157,7 +174,7 @@ class ProviderManager:
         """Run ``fn`` once for concurrent callers asking for the same ``key``.
 
         Several browser tabs/panels refreshing at once share one upstream request instead of
-        each hitting NSE/Angel (which rate-limit aggressively).
+        each hitting the data source (which rate-limit aggressively).
         """
         with self._lock:
             fut = self._inflight.get(key)
@@ -239,19 +256,62 @@ class ProviderManager:
                 accept=None if source else self._is_fresh,
             )
             self._flag_staleness(chain)  # type: ignore[arg-type]
-            enrich_chain(chain, self.risk_free_rate)  # type: ignore[arg-type]
+            self._attach_futures(chain)  # type: ignore[arg-type]
+            sanitize(chain)  # type: ignore[arg-type]
+            r = self.rate_for(chain)  # type: ignore[arg-type]
+            enrich_chain(chain, r)  # type: ignore[arg-type]
+            before = sum(q.suspect for r in chain.rows for q in (r.call, r.put) if q)  # type: ignore[union-attr]
+            validate(chain, r)  # type: ignore[arg-type]
+            if sum(q.suspect for r in chain.rows for q in (r.call, r.put) if q) != before:  # type: ignore[union-attr]
+                enrich_chain(chain, r)  # re-derive the forward without suspects
+            chain.quality = report(chain)  # type: ignore[union-attr]
+            if self.oi_history is not None:
+                try:
+                    self.oi_history.update(chain)
+                except Exception as exc:  # an enhancement; never fail the chain
+                    log.warning("OI history update failed: %s", exc)
+            if self.iv_history is not None and chain.iv30:
+                try:
+                    self.iv_history.record(chain.symbol, chain.iv30 / 100.0, "published")
+                except Exception as exc:
+                    log.warning("IV history update failed: %s", exc)
             self._store(key, chain)
             self._record_snapshot(chain)  # type: ignore[arg-type]
             return chain
 
         return self._apply_live(self._single_flight(key, fetch))  # type: ignore[arg-type]
 
+    def rate_for(self, chain: OptionChain) -> float:
+        """Term-matched risk-free rate from the Treasury curve (or the configured fallback)."""
+        if self.curve is not None:
+            chain.rate, chain.rate_source = self.curve.rate(chain.years_to_expiry())
+        else:
+            chain.rate, chain.rate_source = self.risk_free_rate, f"configured {self.risk_free_rate * 100:.2f}%"
+        return chain.rate
+
+    def _attach_futures(self, chain: OptionChain) -> None:
+        """Best effort: the exchange futures price for this expiry from the same source."""
+        key = ("futures", chain.symbol, chain.source)
+        prices = self._cached(key)
+        if prices is None:
+            prices = {}
+            try:
+                p = self.provider(chain.source)
+                if hasattr(p, "get_futures"):
+                    prices = p.get_futures(chain.symbol)  # type: ignore[attr-defined]
+            except Exception as exc:  # futures are an enhancement; never fail the chain
+                log.info("Futures quote unavailable for %s: %s", chain.symbol, exc)
+            self._store(key, prices)
+        chain.futures_ltp = prices.get(chain.expiry) if prices else None
+        if chain.futures_ltp:
+            chain.notes.append(f"Futures leg priced at the exchange futures quote {chain.futures_ltp:,.2f}")
+
     def _is_fresh(self, chain) -> bool:
         """During market hours, reject snapshots older than ``stale_seconds`` so the next source
         is tried. Outside market hours last-traded prices are the current prices."""
-        from ..market_hours import clock_session
+        from ..market_hours import us_session
 
-        if not clock_session(utcnow())["open"]:
+        if not us_session(utcnow())["open"]:
             return True
         age = chain.data_age_seconds()
         return age is None or age <= self.stale_seconds
@@ -316,32 +376,7 @@ class ProviderManager:
         }
 
     def market_status(self) -> dict:
-        """Current NSE session: NSE's own status when reachable, else a labelled clock estimate."""
-        from ..market_hours import clock_session
+        """US options session from the NYSE calendar (holidays and 1 pm early closes included)."""
+        from ..market_hours import us_session
 
-        cached = self._cached(("market",))
-        if cached is not None:
-            return cached  # type: ignore[return-value]
-        now = utcnow()
-        nse = next((p for p in self.providers if p.name == "nse"), None)
-        holidays = None
-        result = None
-        if nse is not None and hasattr(nse, "get_market_status") and self.is_online():
-            try:
-                result = nse.get_market_status()  # type: ignore[attr-defined]
-            except DataUnavailableError as exc:
-                log.info("NSE market status unavailable: %s", exc)
-            try:
-                holidays = nse.get_holidays()  # type: ignore[attr-defined]
-            except DataUnavailableError as exc:
-                log.info("NSE holiday list unavailable: %s", exc)
-        clock = clock_session(now, holidays)
-        if result is None:
-            result = clock
-        else:
-            result["next_open"] = clock["next_open"] if not result["open"] else None
-            result["closes_at"] = clock["closes_at"] if result["open"] else None
-        with self._lock:
-            # Session state changes slowly; refresh at most once a minute.
-            self._cache[("market",)] = _CacheEntry(result, time.time() + max(0.0, 60 - self.cache_ttl))
-        return result
+        return us_session(utcnow())

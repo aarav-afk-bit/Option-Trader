@@ -34,3 +34,45 @@ def test_builder_has_optimise_button():
     client = TestClient(create_app(manager_with()))
     html = client.get("/").text
     assert 'id="opt-run"' in html and 'id="opt-goal"' in html
+
+
+def test_design_system_fonts_served():
+    client = TestClient(create_app(manager_with()))
+    css = client.get("/static/styles.css").text
+    for f in ("orbitron-latin-800-normal.woff2", "jetbrains-mono-latin-400-normal.woff2"):
+        assert f in css
+        assert client.get(f"/static/vendor/fonts/{f}").status_code == 200
+    # Body text stays in the normal system font; the display font is only for accents.
+    assert '--font-ui: system-ui' in css
+
+
+def test_neon_side_panels_present():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    assert 'class="tabs sidebar neon-panel"' in html and 'id="hud-panel"' in html
+    assert html.count('class="tab') >= 8 and 'id="cmd"' in html
+    assert client.get("/static/hud.js").status_code == 200
+
+
+def test_series_palette_tokens_and_no_dual_axes():
+    client = TestClient(create_app(manager_with()))
+    css = client.get("/static/styles.css").text
+    assert "--series-1: #00a6ba" in css and "--series-1: #0581a3" in css  # dark and light, validated
+    for js in ("charts.js", "builder.js"):
+        assert "overlaying" not in client.get(f"/static/{js}").text  # stacked panels, never two y-scales
+
+
+def test_guide_assets():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    assert 'id="chain-summary"' in html and 'id="tour-open"' in html
+    js = client.get("/static/guide.js").text
+    for term in ('"iv":', '"delta":', '"pcr":', '"max pain":', '"theta":'):
+        assert term in js
+
+
+def test_fx_assets_and_reduced_motion_guard():
+    client = TestClient(create_app(manager_with()))
+    html = client.get("/").text
+    assert 'id="fx-toggle"' in html and 'id="boot"' in html and "prefers-reduced-motion" in html
+    assert client.get("/static/fx.js").status_code == 200

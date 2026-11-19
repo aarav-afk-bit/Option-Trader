@@ -72,7 +72,36 @@ def recommendations(symbol: str, expiry: Optional[str] = None, source: Optional[
         except DataUnavailableError as exc:
             raise ResolveError(str(exc)) from exc
 
-    return recommend(chain, candles, manager.risk_free_rate, max(lots, 1), later_chain)
+    out = recommend(chain, candles, (chain.rate or manager.risk_free_rate), max(lots, 1), later_chain)
+    out["warnings"] = event_warnings(manager, chain)
+    return out
+
+
+def event_warnings(manager: ProviderManager, chain) -> list[str]:
+    """Plain-English warnings about earnings/dividends inside this expiry (never raises)."""
+    from ..events import assignment_risk, reaction_expiry_ok
+
+    if manager.events is None:
+        return []
+    try:
+        ev = manager.events.get(chain.symbol)
+    except Exception:
+        return []
+    out = []
+    if ev.next_earnings and reaction_expiry_ok(chain.expiry, ev.next_earnings, ev.earnings_timing):
+        when = f" ({ev.earnings_timing})" if ev.earnings_timing else ""
+        out.append(f"Earnings on {ev.next_earnings:%b %d}{when}, before this expiry: implied volatility usually "
+                   "drops sharply after the report (IV crush), which hurts option buyers and helps sellers, "
+                   "and the stock can gap past your strikes.")
+    risk = assignment_risk(chain, ev.ex_dividend, ev.dividend)
+    if risk["applies"]:
+        n = len(risk["contracts"])
+        msg = f"Ex-dividend on {ev.ex_dividend:%b %d} (${ev.dividend:.2f}/share) before this expiry: calls are cheaper and puts dearer by about the dividend."
+        if n:
+            msg += (f" {n} in-the-money call strike{'s' if n > 1 else ''} have less time value than the dividend; "
+                    f"short calls there are likely to be assigned on {risk['exercise_by']}.")
+        out.append(msg)
+    return out
 
 
 @router.get("/term-structure")
@@ -141,3 +170,127 @@ def watchlist(symbols: str, source: Optional[str] = None,
             "bias": "bullish" if score > 0.2 else "bearish" if score < -0.2 else "neutral",
         })
     return {"rows": rows}
+
+
+@router.get("/events")
+def events(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None,
+           manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Earnings and dividends that affect this symbol's options, with what the market prices in."""
+    from ..events import CorporateEvents, assignment_risk, earnings_move, historical_moves, reaction_expiry_ok
+
+    ev = manager.events.get(symbol) if manager.events is not None else CorporateEvents(
+        symbol.upper(), error="Corporate events are not enabled")
+    out: dict = {"symbol": ev.symbol, "events": ev.to_dict(), "available": ev.error is None}
+    try:
+        chain = manager.get_chain(symbol, parse_expiry(expiry), source)
+    except DataUnavailableError:
+        chain = None
+    if chain is not None:
+        out.update(expiry=chain.expiry.isoformat(), exercise=chain.exercise)
+        if ev.next_earnings:
+            def ok(e):
+                return reaction_expiry_ok(e, ev.next_earnings, ev.earnings_timing)
+
+            out["earnings_before_expiry"] = ok(chain.expiry)
+            post = next((e for e in sorted(chain.expiries) if ok(e)), None)
+            pre = max((e for e in chain.expiries if not ok(e)), default=None)
+            if post is not None:
+                try:
+                    post_chain = chain if post == chain.expiry else manager.get_chain(symbol, post, chain.source)
+                    pre_chain = manager.get_chain(symbol, pre, chain.source) if pre is not None else None
+                    out["implied"] = earnings_move(post_chain, pre_chain)
+                except DataUnavailableError as exc:
+                    out["implied_error"] = str(exc)
+        out["ex_div_before_expiry"] = bool(ev.ex_dividend and ev.ex_dividend <= chain.expiry)
+        out["assignment"] = assignment_risk(chain, ev.ex_dividend, ev.dividend)
+    if ev.past_earnings:
+        try:
+            out["history"] = historical_moves(ev.past_earnings, manager.get_history(symbol, "2y", "1d"), ev.past_timing)
+        except DataUnavailableError as exc:
+            out["history_error"] = str(exc)
+    return out
+
+
+def _near_chains(manager: ProviderManager, symbol: str, expiry: Optional[str], source: Optional[str], count: int):
+    """The chosen (or nearest) expiry plus the following ones, up to ``count`` chains."""
+    try:
+        first = manager.get_chain(symbol, parse_expiry(expiry), source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    chains = [first]
+    for e in [e for e in sorted(first.expiries) if e > first.expiry][: max(count, 1) - 1]:
+        try:
+            chains.append(manager.get_chain(symbol, e, first.source))
+        except DataUnavailableError:
+            break
+    return chains
+
+
+@router.get("/gamma")
+def gamma(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None, expiries: int = 4,
+          manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Dealer gamma exposure by strike, total, and the zero-gamma level."""
+    from ..analytics.gamma import gamma_exposure
+
+    chains = _near_chains(manager, symbol, expiry, source, min(max(expiries, 1), 8))
+    try:
+        return gamma_exposure(chains, chains[0].rate or manager.risk_free_rate)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/flow")
+def flow(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None, expiries: int = 4,
+         min_volume: int = 100, min_vol_oi: float = 1.0, min_premium: float = 25_000,
+         manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Unusual options activity: big, new-position volume, ranked by premium traded."""
+    from ..analytics.flow import unusual_activity
+
+    chains = _near_chains(manager, symbol, expiry, source, min(max(expiries, 1), 8))
+    return unusual_activity(chains, max(min_volume, 1), max(min_vol_oi, 0.0), max(min_premium, 0.0))
+
+
+def _hv(candles, days: int = 20) -> Optional[float]:
+    import math
+
+    closes = [c.close for c in candles if c.close][-(days + 1):]
+    if len(closes) < days + 1:
+        return None
+    rets = [math.log(b / a) for a, b in zip(closes, closes[1:])]
+    m = sum(rets) / len(rets)
+    return math.sqrt(sum((x - m) ** 2 for x in rets) / (len(rets) - 1) * 252)
+
+
+@router.get("/surface")
+def vol_surface(symbol: str, source: Optional[str] = None, expiries: int = 8,
+                manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Implied-volatility surface, 25-delta skew per expiry, IV30 and IV rank/percentile."""
+    from ..analytics.surface import surface
+
+    try:
+        first = manager.get_chain(symbol, None, source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    start = min(first.expiries or [first.expiry])  # the surface starts at the nearest listed expiry
+    chains = _near_chains(manager, symbol, start.isoformat(), first.source, min(max(expiries, 2), 12))
+    out = surface(chains, lambda c: c.rate or manager.risk_free_rate)
+    published = chains[0].iv30 / 100.0 if chains[0].iv30 else None
+    current = published if published is not None else out["iv30"]
+    out["iv30_source"] = "Cboe published IV30" if published is not None else (
+        "computed: 30-day ATM IV from the listed expiries" if out["iv30"] else None)
+    out["iv30_current"] = current
+    hist = getattr(manager, "iv_history", None)
+    if hist is not None:
+        if published is None and out["iv30"]:
+            hist.record(chains[0].symbol, out["iv30"], "computed")
+        out["iv_rank"] = hist.rank(chains[0].symbol, current)
+    else:
+        out["iv_rank"] = None
+    try:
+        hv = _hv(manager.get_history(symbol, "3mo", "1d"))
+    except DataUnavailableError:
+        hv = None
+    out["hv20"] = hv
+    out["iv_hv_ratio"] = round(current / hv, 3) if current and hv else None
+    out["source"] = chains[0].source
+    return out

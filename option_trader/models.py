@@ -10,13 +10,21 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal, Optional
+from zoneinfo import ZoneInfo
 
 from .errors import InvalidDataError
 
 OptionType = Literal["CE", "PE"]
 
-IST = timezone(timedelta(hours=5, minutes=30))
-NSE_EXPIRY_TIME = time(15, 30)
+ET = ZoneInfo("America/New_York")
+US_EXPIRY_TIME = time(16, 0)  # US equity/ETF options and PM-settled index options
+US_AM_SETTLE_TIME = time(9, 30)  # AM-settled index options (e.g. SPX monthlies) settle at the open
+CONTRACT_MULTIPLIER = 100  # standard US equity/index option multiplier
+
+
+def default_expiry_at(expiry: date, source: str = "") -> datetime:
+    """When an expiry date's contracts stop trading: 16:00 New York for US options."""
+    return datetime.combine(expiry, US_EXPIRY_TIME, tzinfo=ET)
 
 
 @dataclass
@@ -42,6 +50,8 @@ class OptionQuote:
     vega: Optional[float] = None  # per 1 vol point (1%)
     symbol: Optional[str] = None  # source-specific identifier/trading symbol
     source_iv: Optional[float] = None  # IV as published by the data source, kept for reference
+    suspect: bool = False  # failed a data-quality check (see quality.py); shown but not relied on
+    issues: list = field(default_factory=list)
     tick_ts: Optional[str] = None  # exchange time of the last streamed tick applied to this quote
 
     @property
@@ -108,18 +118,29 @@ class OptionChain:
     exchange_timestamp: Optional[str] = None
     lot_size: Optional[int] = None
     expiries: list[date] = field(default_factory=list)
-    currency: str = "INR"
+    currency: str = "USD"
     notes: list[str] = field(default_factory=list)
-    # Exact expiry moment when it differs from NSE's 15:30 IST close (e.g. US options).
+    # Exact moment trading stops (16:00 ET by default; 9:30 ET for AM-settled index options).
     expiry_at: Optional[datetime] = None
     # Set when streamed exchange ticks have been applied on top of the snapshot.
     live_at: Optional[str] = None
     # Market-implied forward (put-call parity) and the carry yield q it implies.
     forward: Optional[float] = None
     carry: float = 0.0
+    # Price a futures leg for this expiry trades at: the implied forward, or spot carried at r.
+    fut_price: Optional[float] = None
+    # Exchange-traded futures price for this expiry, when a future exists (monthly expiries).
+    futures_ltp: Optional[float] = None
+    quality: Optional[dict] = None  # data-quality report (quality.report)
+    rate: Optional[float] = None  # continuous risk-free rate used for this expiry
+    rate_source: Optional[str] = None
+    iv30: Optional[float] = None  # 30-day implied volatility index of the underlying, in % (Cboe)
+    verification: Optional[dict] = None  # last cross-source check (verify.compare summary)
 
     def __post_init__(self) -> None:
         self.rows.sort(key=lambda r: r.strike)
+        if self.expiry_at is None:
+            self.expiry_at = default_expiry_at(self.expiry, self.source)
 
     @property
     def strikes(self) -> list[float]:
@@ -153,15 +174,16 @@ class OptionChain:
     def expiry_datetime(self) -> datetime:
         if self.expiry_at is not None:
             return self.expiry_at
-        return datetime.combine(self.expiry, NSE_EXPIRY_TIME, tzinfo=IST)
+        return default_expiry_at(self.expiry, self.source)
 
     def exchange_time(self) -> Optional[datetime]:
-        """Exchange timestamp of the snapshot (e.g. NSE's '14-Oct-2026 15:30:00', IST)."""
+        """Exchange timestamp of the snapshot (e.g. Cboe's '2026-10-15 10:00:02', New York time)."""
         if not self.exchange_timestamp:
             return None
-        for fmt in ("%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        tz = ET
+        for fmt in ("%d-%b-%Y %H:%M:%S", "%d-%b-%Y %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
             try:
-                return datetime.strptime(self.exchange_timestamp.strip(), fmt).replace(tzinfo=IST)
+                return datetime.strptime(self.exchange_timestamp.strip(), fmt).replace(tzinfo=tz)
             except ValueError:
                 continue
         return None
@@ -197,10 +219,18 @@ class OptionChain:
             )
         return self
 
+    @property
+    def exercise(self) -> str:
+        """US index options are European; equity and ETF options are American."""
+        from .providers.base import exercise_style
+
+        return exercise_style(self.symbol)
+
     def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "expiry": self.expiry.isoformat(),
+            "exercise": self.exercise,
             "spot": self.spot,
             "source": self.source,
             "fetched_at": self.fetched_at.isoformat(),
@@ -213,6 +243,13 @@ class OptionChain:
             "notes": self.notes,
             "live_at": self.live_at,
             "forward": self.forward,
+            "fut_price": self.fut_price,
+            "quality": self.quality,
+            "iv30": self.iv30,
+            "rate": self.rate,
+            "rate_source": self.rate_source,
+            "verification": self.verification,
+            "futures_ltp": self.futures_ltp,
             "carry": self.carry,
             "data_age_seconds": self.data_age_seconds(),
             "rows": [r.to_dict() for r in self.rows],

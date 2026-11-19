@@ -15,7 +15,7 @@ from option_trader.analytics.chain import (
 from option_trader.app import create_app
 from option_trader.models import OptionChain, OptionQuote, StrikeRow
 
-from .helpers import RecordedNSEProvider, manager_with
+from .helpers import RecordedProvider, manager_with
 
 EXP = date(2026, 10, 27)
 
@@ -24,11 +24,11 @@ def chain_from(spec, spot=100.0):
     """spec: list of (strike, call_oi, put_oi)"""
     rows = [StrikeRow(k, OptionQuote(k, "CE", EXP, ltp=1, oi=c), OptionQuote(k, "PE", EXP, ltp=1, oi=p))
             for k, c, p in spec]
-    return OptionChain("T", EXP, spot, rows, "nse", datetime.now(timezone.utc))
+    return OptionChain("T", EXP, spot, rows, "cboe", datetime.now(timezone.utc))
 
 
 def test_pcr_and_levels_on_recorded_chain():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     p = pcr(ch)
     assert p["call_oi"] == 51234 + 91234 + 121234
     assert p["pcr_oi"] == pytest.approx((81234 + 101234 + 41234) / (51234 + 91234 + 121234), abs=1e-3)
@@ -56,22 +56,22 @@ def test_buildup_labels():
 
 
 def test_buildup_net_on_recorded_chain():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     bu = buildup(ch)
     # Calls are falling with rising OI (short build-up) and puts rising with OI (long build-up): bearish
     assert bu["net"] < 0
 
 
 def test_iv_skew():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     assert iv_skew(ch, 1) == pytest.approx(0.121 - 0.105)
 
 
 def test_full_analytics_and_api():
-    ch = RecordedNSEProvider().get_option_chain("NIFTY")
+    ch = RecordedProvider().get_option_chain("NDX")
     a = analyze_chain(ch).to_dict()
     names = {s["name"] for s in a["signals"]}
     assert {"PCR (OI)", "Max pain", "OI range", "OI build-up", "IV skew"} <= names
-    client = TestClient(create_app(manager_with(RecordedNSEProvider())))
-    r = client.get("/api/analytics/chain", params={"symbol": "NIFTY"})
-    assert r.status_code == 200 and r.json()["source"] == "nse"
+    client = TestClient(create_app(manager_with(RecordedProvider())))
+    r = client.get("/api/analytics/chain", params={"symbol": "NDX"})
+    assert r.status_code == 200 and r.json()["source"] == "cboe"

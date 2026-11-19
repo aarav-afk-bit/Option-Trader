@@ -3,7 +3,7 @@
 ``score`` blends the two things a trader asks for, controlled by ``win_weight`` (0..1):
 
 * win rate: probability the position is profitable at the near expiry after charges
-* edge: expected P&L per rupee of risk, squashed to 0..1
+* edge: expected P&L per dollar of risk, squashed to 0..1
 
 Strategies with a negative expectation are scaled down, so a high win rate bought with rare
 large losses does not win. Hard constraints (max loss, unlimited loss) reject a strategy outright.
@@ -26,11 +26,14 @@ from .distribution import Distribution
 @dataclass
 class Preferences:
     win_weight: float = 0.5  # 1 = only win rate matters, 0 = only expected return on risk
-    max_loss: Optional[float] = None  # largest acceptable loss in rupees (positive)
+    max_loss: Optional[float] = None  # largest acceptable loss in dollars (positive)
     allow_unlimited_loss: bool = False
     min_win_rate: float = 0.0
     max_legs: int = 4
     max_lots_per_leg: int = 5
+    max_spread_pct: float = 10.0  # skip contracts whose bid/ask spread is wider than this % of mid
+    min_oi: float = 0.0  # skip contracts with less open interest than this
+    robust: bool = True  # also score under the underlying finishing 0.5 sd higher/lower
 
     def clamp(self) -> "Preferences":
         self.win_weight = min(max(self.win_weight, 0.0), 1.0)
@@ -104,7 +107,7 @@ def score(metrics: dict, prefs: Preferences) -> Optional[float]:
     s = prefs.win_weight * metrics["win_rate"] + (1 - prefs.win_weight) * edge_score
     if metrics["edge"] < 0:
         # A high win rate with a negative expectation (small wins, big losses) is not a good
-        # trade: scale the score down in proportion to the expected loss per rupee at risk.
+        # trade: scale the score down in proportion to the expected loss per dollar at risk.
         s *= max(0.1, 1 + 4 * metrics["edge"])
     return round(s, 5)
 

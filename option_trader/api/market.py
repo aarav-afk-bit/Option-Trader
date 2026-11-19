@@ -27,6 +27,42 @@ def market(manager: ProviderManager = Depends(get_manager)) -> dict:
     return manager.market_status()
 
 
+@router.get("/verify")
+def verify(symbol: str, expiry: Optional[str] = None, source: Optional[str] = None,
+           manager: ProviderManager = Depends(get_manager)) -> dict:
+    """Compare the chain with a second, independent source."""
+    from ..verify import compare, pick_secondary
+
+    try:
+        primary = manager.get_chain(symbol, parse_expiry(expiry), source)
+    except DataUnavailableError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    other = pick_secondary(manager, primary.source)
+    if other is None:
+        return {"available": False, "primary": primary.source,
+                "reason": "Cross-checking needs a second source: enable Cboe, Tradier or Yahoo as well."}
+    try:
+        secondary = manager.get_chain(symbol, primary.expiry, other)
+    except DataUnavailableError as exc:
+        return {"available": False, "primary": primary.source, "secondary": other, "reason": str(exc)}
+    out = compare(primary, secondary)
+    out["available"] = True
+    primary.verification = {k: out[k] for k in ("secondary", "agree_pct", "confidence", "matched")}
+    return out
+
+
+@router.get("/rates")
+def rates(manager: ProviderManager = Depends(get_manager)) -> dict:
+    """The Treasury yield curve the app prices with (or the fallback rate)."""
+    curve = manager.curve.curve() if manager.curve is not None else None
+    if curve is None:
+        return {"available": False, "fallback_rate": manager.risk_free_rate,
+                "error": getattr(manager.curve, "last_error", None)}
+    return {"available": True, **curve.to_dict(),
+            "examples": {label: round(curve.rate(t) * 100, 3) for label, t in
+                         (("1 week", 7 / 365), ("1 month", 30 / 365), ("3 months", 0.25), ("1 year", 1.0))}}
+
+
 @router.get("/indices")
 def indices(manager: ProviderManager = Depends(get_manager)) -> dict:
     from ..indices import get_indices
@@ -81,8 +117,8 @@ async def stream(request: Request, symbol: str, expiry: Optional[str] = None, so
 
     async def events():
         if manager.live is None:
-            reason = ("Live ticks need Angel One credentials (ANGEL_API_KEY, ANGEL_CLIENT_CODE, ANGEL_PIN, "
-                      "ANGEL_TOTP_SECRET). Showing polled snapshots instead.")
+            reason = ("Real-time ticks need a Tradier production API token (Settings page). "
+                      "Showing refreshed snapshots instead.")
             yield f"event: status\ndata: {json.dumps({'live': False, 'reason': reason})}\n\n"
             return
         last_version, last_beat = -1, 0.0

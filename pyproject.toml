@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "option-trader"
 version = "0.1.0"
-description = "Real-data options chain analysis, signals and strategy builder for NSE and other markets"
+description = "Real-data US options analysis, valuation models, signals and strategy builder"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -16,13 +16,12 @@ dependencies = [
     "pandas>=2.1",
     "scipy>=1.11",
     "yfinance>=0.2.40",
-    "pyotp>=2.9",
     "python-dotenv>=1.0",
     "websocket-client>=1.7",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=8", "httpx>=0.27", "time-machine>=2.14"]
 
 [project.scripts]
 option-trader = "option_trader.__main__:main"
