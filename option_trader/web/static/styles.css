@@ -533,3 +533,45 @@ button.qt-btn:hover:not(:disabled) { color: var(--green); border-color: var(--gr
 .ev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .ev-moves { display: flex; gap: 4px; align-items: flex-end; height: 60px; margin-top: 8px; }
 .ev-moves span { flex: 1; min-width: 6px; border-radius: 2px 2px 0 0; }
+
+
+/* ==========================================================================
+   Calmer look (about half the cyberpunk): plain background, no corner brackets,
+   softer neon on the side panels, no glowing text. Dark theme, cyan accent, the
+   logo and the HUD clock stay. Effects (scanlines, boot, glitch) are opt-in (FX).
+   ========================================================================== */
+:root { --glow: none; --glow-strong: none; --chart-grid: rgba(150, 170, 200, .08); }
+body { background: var(--bg); }
+
+.card { background: var(--panel) !important; box-shadow: none; }
+.card h3::before { display: none; }
+h2 { font-family: var(--font-ui); font-weight: 600; letter-spacing: .02em; text-transform: none; font-size: 17px; }
+thead tr.side-head th { font-family: var(--font-ui); letter-spacing: .12em; font-weight: 600; }
+
+.brand { text-shadow: none; }
+.brand .slash { text-shadow: none; }
+.tab.active { text-shadow: none; }
+.tab.active::after { box-shadow: none; }
+td.ltp:hover { text-shadow: none; }
+td.flash-up, td.flash-down { text-shadow: none; }
+.dot.on, .dot.off { box-shadow: none; }
+button.danger:hover:not(:disabled) { box-shadow: none; }
+table.legs tr.buy td:first-child, table.legs tr.sell td:first-child { box-shadow: none; }
+.toast { box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+
+/* side panels: keep a thin neon edge, drop the halo, inner glow and moving scan line */
+.neon-panel { background: var(--panel) !important;
+  border-color: color-mix(in srgb, var(--neon) 40%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--neon) 18%, transparent) !important; }
+.neon-panel::before { display: none; }
+.neon-panel::after { box-shadow: none; opacity: .55; }
+.side-title { font-family: var(--font-ui); font-weight: 600; font-size: 12px; letter-spacing: .08em;
+  text-transform: uppercase; text-shadow: none; color: var(--muted); }
+.sidebar .tab.active { text-shadow: none; }
+.sidebar .tab.active .ico { filter: none; }
+.hud-clock { text-shadow: none; }
+.hud-sep { background: var(--border); opacity: 1; }
+.hud-reopen { font-family: var(--font-ui); letter-spacing: .05em; font-size: 12px; box-shadow: none; }
+.fx-toggle.on { box-shadow: none; }
+.tour-step { font-family: var(--font-ui); letter-spacing: .08em; }
+button.optimise-btn:hover:not(:disabled) { box-shadow: none !important; filter: brightness(1.1); }
